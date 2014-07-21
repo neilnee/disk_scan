@@ -14,7 +14,7 @@ CScanner::~CScanner()
 {
 }
 
-void CScanner::ScanDirectory()
+void CScanner::ScanBaseDir(std::vector<std::wstring> &baseDirs)
 {
     TCHAR szTemp[BUF_SIZE];
     szTemp[0] = '\0';
@@ -25,14 +25,22 @@ void CScanner::ScanDirectory()
         WIN32_FIND_DATA fileData;
         HANDLE handle = NULL;
         BOOL finish = FALSE;
-        m_RootPaths.clear();
         do {
             *szDrive = *p;
+			UINT driveType = GetDriveType(szDrive);
+			// 过滤掉软驱，只考虑本地磁盘和可移动磁盘
+			if (szDrive[0] == L'a' || szDrive[0] == L'A' || szDrive[0] == L'b' || szDrive[0] == L'B'
+				|| (driveType != DRIVE_FIXED && driveType != DRIVE_REMOVABLE)) {
+				while(*p++);
+				continue;
+			}
             SetCurrentDirectory(szDrive);
             handle = FindFirstFile(L"*", &fileData);
             if (handle != INVALID_HANDLE_VALUE) {
                 finish = FALSE;
                 do {
+					//只考虑非系统的目录，同时过滤调一些系统创建的文件夹
+					//需要过滤掉.和..
                     if ((fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
                         && !(fileData.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM)) {
                         std::wstring strFileName = fileData.cFileName;
@@ -40,14 +48,51 @@ void CScanner::ScanDirectory()
                             && strFileName != L"Program Files"
                             && strFileName != L"Program Files (x86)"
                             && strFileName != L"ProgramData") {
-                                m_RootPaths.push_back(szDrive+strFileName);
+                                baseDirs.push_back(szDrive+strFileName);
                         }
                     }
                     finish = !FindNextFile(handle, &fileData);
                 } while (!finish);
             }
-            while(*p++);
+			while(*p++);
         } while (*p);
         FindClose(handle);
     }
+}
+
+void CScanner::ScanPicDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &picDir)
+{
+	//先循环扫描出baseDir下的每个目录中的文件列表和目录列表
+	//对每个文件列表进行判定
+	//将所有的目录列表汇集以后，递归调用ScanPicDir
+	if (baseDir == NULL) {
+		return;
+	}
+	std::vector<std::wstring>::iterator iter;
+	std::vector<std::wstring> searchDir;
+	for (iter = baseDir->begin(); iter != baseDir->end(); iter++) {
+		WIN32_FIND_DATA fileData;
+		HANDLE handle = NULL;
+		BOOL finish = FALSE;
+		std::vector<std::wstring> fileList;
+		std::wstring dirStr = *iter;
+		
+		// 需要补上最后的斜杠
+		LPCTSTR directory = (*iter).c_str();
+		SetCurrentDirectory(directory);
+		handle = FindFirstFile(L"*", &fileData);
+		if (handle != INVALID_HANDLE_VALUE) {
+			finish = FALSE;
+			do {
+				std::wstring strFileName = fileData.cFileName;
+				//需要过滤掉.和..
+				if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+					searchDir.push_back(directory+strFileName);
+				} else {
+					fileList.push_back(directory+strFileName);
+				}
+				finish = !FindNextFile(handle, &fileData);
+			} while (!finish);
+		}
+	}
 }

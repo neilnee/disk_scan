@@ -7,7 +7,10 @@
 int _tmain(int argc, _TCHAR* argv[])
 {
     xl_ds_api::CScanner* scanner = new xl_ds_api::CScanner();
-    scanner->ScanDirectory();
+	std::vector<std::wstring> baseDirs;
+	std::vector<std::wstring> picDirs;
+    scanner->ScanBaseDir(baseDirs);
+	scanner->ScanPicDir(&baseDirs, picDirs);
 	return 0;
 }
 
