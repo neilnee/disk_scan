@@ -1,0 +1,6 @@
+*~
+*.swp
+*.ncb
+*.user
+
+debug/
