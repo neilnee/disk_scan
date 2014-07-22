@@ -124,30 +124,25 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 	for (iter = baseDir->begin(); iter != baseDir->end(); iter++) {
 		WIN32_FIND_DATA fileData;
 		HANDLE handle = NULL;
-		std::wstring dirStr = *iter;
+		std::wstring directory = *iter;
         
         // 需要补上最后的斜杠
-        if (dirStr.rfind(L"\\") != dirStr.length() - 1) {
-            dirStr.append(L"\\");
+        if (directory.rfind(L"\\") != directory.length() - 1) {
+            directory.append(L"\\");
         }
-
 		// 跳过忽略文件夹
-		if (std::find(m_IgnoreDirs.begin(), m_IgnoreDirs.end(), dirStr) != m_IgnoreDirs.end()) {
+		if (std::find(m_IgnoreDirs.begin(), m_IgnoreDirs.end(), directory) != m_IgnoreDirs.end()) {
 			continue;
 		}
-
 		// 如果是非优先扫描，则跳过优先扫描文件夹
-		if (!priority && std::find(m_PriorityDirs.begin(), m_PriorityDirs.end(), dirStr) != m_PriorityDirs.end()) {
+		if (!priority && std::find(m_PriorityDirs.begin(), m_PriorityDirs.end(), directory) != m_PriorityDirs.end()) {
 			continue;
 		}
-
 		//开始扫描directory目录，并回调进度
 		if (m_ScanTargetCallback != NULL) {
-			m_ScanTargetCallback(SCAN_START, m_ScanDirs, dirStr);
+			m_ScanTargetCallback(SCAN_START, m_ScanDirs, directory);
 		}
-        LPCTSTR directory = dirStr.c_str();
-		SetCurrentDirectory(directory);
-
+		SetCurrentDirectory(directory.c_str());
 		handle = FindFirstFile(L"*", &fileData);
 		if (handle != INVALID_HANDLE_VALUE) {
 			BOOL finish = FALSE;
@@ -185,7 +180,7 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 			} while (!finish);
             // 目标文件夹的外层判定判定规则，遍历完后判定
             if(found || (targetCount > 20 && otherCount == 0)) {
-                targetDir.push_back(directory);
+                PushBackDir(targetDir, directory);
 				if (m_ScanTargetCallback != NULL) {
 					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, directory);
 				}
