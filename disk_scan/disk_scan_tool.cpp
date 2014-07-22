@@ -98,7 +98,7 @@ void CScanner::InitBaseDir()
 							|| fileName == L"Program Files (x86)") {
 								PushBackDir(m_IgnoreDirs, directory);
 						}
-						m_BaseDirs.push_back(directory);
+						PushBackDir(m_BaseDirs, directory);
                     }
                     finish = !FindNextFile(handle, &fileData);
                 } while (!finish);
