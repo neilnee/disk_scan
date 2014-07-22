@@ -55,7 +55,7 @@ namespace xl_ds_api
 		 *
 		 * @param baseDirs : out, 扫描到的一级目录列表
 		 */
-		void ScanBaseDir();
+		void InitBaseDir();
 
     public :
         std::vector<std::wstring> m_BaseDirs;

@@ -8,7 +8,7 @@ using namespace xl_ds_api;
 CScanner::CScanner()
 {
 	Init();
-	ScanBaseDir();
+	InitBaseDir();
 }
 
 CScanner::~CScanner()
@@ -28,7 +28,7 @@ void CScanner::Init()
 	INT prioritys[] = PRIORITY_DIRS;
 	TCHAR szPath[MAX_PATH];
 
-	size_t size  = sizeof(prioritys)/sizeof(prioritys[0]);
+	INT size  = sizeof(prioritys)/sizeof(prioritys[0]);
 	for (INT i=0; i<size; i++) {
 		SHGetFolderPath(NULL, prioritys[i], NULL, 0, szPath);
 		std::wstring directory = szPath;
@@ -61,11 +61,7 @@ void CScanner::PushBackDir(std::vector<std::wstring> &dirList, std::wstring &dir
 	}
 }
 
-void CScanner::SetScanTargetCallback(ScanTargetCallback callback) {
-	m_ScanTargetCallback = callback;
-}
-
-void CScanner::ScanBaseDir()
+void CScanner::InitBaseDir()
 {
     TCHAR szTemp[BUF_SIZE];
     szTemp[0] = '\0';
@@ -111,6 +107,10 @@ void CScanner::ScanBaseDir()
         } while (*p);
         FindClose(handle);
     }
+}
+
+void CScanner::SetScanTargetCallback(ScanTargetCallback callback) {
+	m_ScanTargetCallback = callback;
 }
 
 void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
