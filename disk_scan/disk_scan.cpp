@@ -6,7 +6,7 @@
 
 INT m_Count = 0;
 
-void callback(INT scan, std::wstring current) {
+void callback(INT event, INT scan, std::wstring directory) {
 	m_Count = scan;
 }
 

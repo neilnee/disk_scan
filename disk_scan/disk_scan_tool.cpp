@@ -143,7 +143,7 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 
 		//开始扫描directory目录，并回调进度
 		if (m_ScanTargetCallback != NULL) {
-			m_ScanTargetCallback(m_ScanDirs, dirStr);
+			m_ScanTargetCallback(SCAN_START, m_ScanDirs, dirStr);
 		}
         LPCTSTR directory = dirStr.c_str();
 		SetCurrentDirectory(directory);
@@ -186,6 +186,9 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
             // 目标文件夹的外层判定判定规则，遍历完后判定
             if(found || (targetCount > 20 && otherCount == 0)) {
                 targetDir.push_back(directory);
+				if (m_ScanTargetCallback != NULL) {
+					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, directory);
+				}
             }
 		}
         m_ScanDirs++;
