@@ -62,10 +62,7 @@ void CScanner::ScanBaseDir(std::vector<std::wstring> &baseDirs)
 
 void CScanner::ScanPicDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &picDir)
 {
-	//先循环扫描出baseDir下的每个目录中的文件列表和目录列表
-	//对每个文件列表进行判定
-	//将所有的目录列表汇集以后，递归调用ScanPicDir
-	if (baseDir == NULL) {
+	if (baseDir == NULL || baseDir->size() <= 0) {
 		return;
 	}
 	std::vector<std::wstring>::iterator iter;
@@ -76,9 +73,14 @@ void CScanner::ScanPicDir(std::vector<std::wstring>* baseDir, std::vector<std::w
 		BOOL finish = FALSE;
 		std::vector<std::wstring> fileList;
 		std::wstring dirStr = *iter;
-		
-		// 需要补上最后的斜杠
-		LPCTSTR directory = (*iter).c_str();
+        
+        // 需要补上最后的斜杠
+        std::wstring::size_type pos = dirStr.rfind(L"\\");
+        if (pos != dirStr.length() - 1) {
+            dirStr.append(L"\\");
+        }
+
+		LPCTSTR directory = dirStr.c_str();
 		SetCurrentDirectory(directory);
 		handle = FindFirstFile(L"*", &fileData);
 		if (handle != INVALID_HANDLE_VALUE) {
@@ -86,13 +88,18 @@ void CScanner::ScanPicDir(std::vector<std::wstring>* baseDir, std::vector<std::w
 			do {
 				std::wstring strFileName = fileData.cFileName;
 				//需要过滤掉.和..
-				if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-					searchDir.push_back(directory+strFileName);
-				} else {
-					fileList.push_back(directory+strFileName);
-				}
+                if (strFileName != L"." && strFileName != L"..") {
+                    if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                        searchDir.push_back(directory+strFileName);
+                    } else {
+                        fileList.push_back(directory+strFileName);
+                    }
+                }
 				finish = !FindNextFile(handle, &fileData);
 			} while (!finish);
 		}
 	}
+    if (searchDir.size() > 0) {
+        ScanPicDir(&searchDir, picDir);
+    }
 }
