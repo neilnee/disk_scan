@@ -1,5 +1,5 @@
 ========================================================================
-    CONSOLE APPLICATION : disk_scan Project Overview
+    WIN32 APPLICATION : disk_scan Project Overview
 ========================================================================
 
 AppWizard has created this disk_scan application for you.
@@ -16,6 +16,28 @@ disk_scan.vcproj
 
 disk_scan.cpp
     This is the main application source file.
+
+/////////////////////////////////////////////////////////////////////////////
+AppWizard has created the following resources:
+
+disk_scan.rc
+    This is a listing of all of the Microsoft Windows resources that the
+    program uses.  It includes the icons, bitmaps, and cursors that are stored
+    in the RES subdirectory.  This file can be directly edited in Microsoft
+    Visual C++.
+
+Resource.h
+    This is the standard header file, which defines new resource IDs.
+    Microsoft Visual C++ reads and updates this file.
+
+disk_scan.ico
+    This is an icon file, which is used as the application's icon (32x32).
+    This icon is included by the main resource file disk_scan.rc.
+
+small.ico
+    This is an icon file, which contains a smaller version (16x16)
+    of the application's icon. This icon is included by the main resource
+    file disk_scan.rc.
 
 /////////////////////////////////////////////////////////////////////////////
 Other standard files:
