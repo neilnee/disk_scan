@@ -2,5 +2,6 @@
 *.swp
 *.ncb
 *.user
+*.suo
 
 debug/
