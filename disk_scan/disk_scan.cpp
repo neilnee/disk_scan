@@ -4,11 +4,12 @@
 #define BUFF_SIZE 1024
 #define COMM_TIMEOUT 5000
 
-HANDLE m_Pipe = INVALID_HANDLE_VALUE;
-HANDLE m_Thread =INVALID_HANDLE_VALUE;
 LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
+HANDLE m_Thread =INVALID_HANDLE_VALUE;
 xl_ds_api::CScanner* m_Scanner = NULL;
-//BOOL m_Executing = FALSE;
+BOOL m_Executing = FALSE;
+std::vector<HANDLE> m_Pipes;
+HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
 
 void ScanTargetCallback(INT event, INT scan, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
@@ -23,29 +24,27 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     }
 
     for(;;) {
-        if (m_Pipe == INVALID_HANDLE_VALUE) {
-            m_Pipe = CreateNamedPipe(
-                m_PipeName,
-                PIPE_ACCESS_DUPLEX |
-				FILE_FLAG_OVERLAPPED,
-                PIPE_TYPE_MESSAGE |
-                PIPE_READMODE_MESSAGE |
-                PIPE_WAIT,
-                PIPE_UNLIMITED_INSTANCES,
-                BUFF_SIZE,
-                BUFF_SIZE,
-                0,
-                NULL);
-        }
-        if (m_Pipe == INVALID_HANDLE_VALUE) {
-            return -1;
-        }
+		HANDLE pipe = CreateNamedPipe(
+			m_PipeName,
+			PIPE_ACCESS_DUPLEX |
+			FILE_FLAG_OVERLAPPED,
+			PIPE_TYPE_MESSAGE |
+			PIPE_READMODE_MESSAGE |
+			PIPE_WAIT,
+			PIPE_UNLIMITED_INSTANCES,
+			BUFF_SIZE,
+			BUFF_SIZE,
+			0,
+			NULL);
+        if (pipe == INVALID_HANDLE_VALUE) {
+            continue;
+		}
 
 		OVERLAPPED connOverl;
 		HANDLE connEvent  = CreateEvent(NULL, TRUE, TRUE, NULL);
 		connOverl.hEvent = connEvent;
 
-        BOOL connected = ConnectNamedPipe(m_Pipe, &connOverl);
+        BOOL connected = ConnectNamedPipe(pipe, &connOverl);
 		DWORD lastError = GetLastError();
 		if (lastError == ERROR_PIPE_CONNECTED) {
 			connected = TRUE;
@@ -55,32 +54,38 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			// 如果没有客户端连接，进入超时等待
 			DWORD waitRet = WaitForSingleObject(connEvent, COMM_TIMEOUT);
 			if (waitRet == WAIT_TIMEOUT) {
-				DisconnectNamedPipe(m_Pipe);
+				DisconnectNamedPipe(pipe);
+				CloseHandle(pipe);
+				// 等待客户端连接超时
 				// 判断当前是否有客户进程存在，如果没有则退出程序，否则继续等待
 				continue;
 			}
 			DWORD transBytes;
-			connected = GetOverlappedResult(m_Pipe, &connOverl, &transBytes, FALSE);
+			connected = GetOverlappedResult(pipe, &connOverl, &transBytes, FALSE);
 		}
 
-        if (connected) {
-			// 获取操作命令是否成功
-            BOOL success = FALSE;
-			OVERLAPPED readOverl;
-			HANDLE readEvent;
-            HANDLE heap = GetProcessHeap();
-            TCHAR* operate = (TCHAR*)HeapAlloc(heap, 0, BUF_SIZE*sizeof(TCHAR));
-            DWORD readBytes = 0;
-			std::wstring operateStr;
+		if (connected) {
+			WaitForSingleObject(m_Mutex,INFINITE);
+			m_Pipes.push_back(pipe);
+			ReleaseMutex(m_Mutex);
+		}
 
-			do {
+        if (connected && !m_Executing) {
+            BOOL success = FALSE;
+			std::wstring operateStr;
+			while(!success) {
+				OVERLAPPED readOverl;
+				HANDLE readEvent;
+				HANDLE heap = GetProcessHeap();
+				TCHAR* operate = (TCHAR*)HeapAlloc(heap, 0, BUF_SIZE*sizeof(TCHAR));
+				DWORD readBytes = 0;
 				readEvent = CreateEvent(NULL, TRUE, TRUE, NULL);
 				readOverl.hEvent = readEvent;
 				readOverl.Offset = 0;
 				readOverl.OffsetHigh = 0;
 				operateStr.clear();
 				success = ReadFile(
-					m_Pipe,
+					pipe,
 					operate,
 					BUF_SIZE*sizeof(TCHAR),
 					&readBytes,
@@ -89,42 +94,27 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					DWORD transByts;
 					DWORD waitResult = WaitForSingleObject(readEvent, COMM_TIMEOUT);
 					if (waitResult == WAIT_TIMEOUT) {
+						// 等待客户端命令超时
 						// 判定当前是否有工作线程运行，如果没有工作线程运行，则超时退出，否则继续等待
 						continue;
 					}
-					success = GetOverlappedResult(m_Pipe, &readOverl, &transByts, FALSE);
+					success = GetOverlappedResult(pipe, &readOverl, &transByts, FALSE);
 				}
 				operateStr = operate;
-			} while (!success);
+			}
             
            if (success && operateStr == L"scan_img") {
-			   // 执行命令使用线程处理
-		   		std::vector<std::wstring> picDirs;
-		   		m_Scanner->SetScanTargetCallback(ScanTargetCallback);
-		   		m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, picDirs, TRUE);
-		   		m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, picDirs, FALSE);
-			   
-		   		LPTSTR endMsg = TEXT("scan_end");
-		   		DWORD write = (lstrlen(endMsg)+1) * sizeof(TCHAR);
-		   		DWORD written;
-		   		WriteFile(
-		   			m_Pipe,
-		   			endMsg,
-		   			write,
-		   			&written,
-		   			NULL);
-		   		DisconnectNamedPipe(m_Pipe);
-
-			   /*DWORD tid = 0;
+			   m_Executing = TRUE;
+			   DWORD tid = 0;
 			   m_Thread = CreateThread(
 				   NULL,
 				   0,
 				   ThreadExecute,
 				   NULL,
 				   0,
-				   &tid);*/
+				   &tid);
            } else {
-               DisconnectNamedPipe(m_Pipe);
+               DisconnectNamedPipe(pipe);
            }
         }
     }
@@ -135,34 +125,38 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 }
 
 void ScanTargetCallback(INT event, INT scan, std::wstring directory) {
-    if (m_Pipe != INVALID_HANDLE_VALUE) {
-        DWORD write = (lstrlen(directory.c_str())+1) * sizeof(TCHAR);
-        DWORD written;
-        BOOL success = WriteFile(
-            m_Pipe,
-            directory.c_str(),
-            write,
-            &written,
-            NULL);
-    }
+	WaitForSingleObject(m_Mutex,INFINITE);	
+	std::vector<HANDLE>::iterator iter;
+	for (iter=m_Pipes.begin(); iter!=m_Pipes.end(); iter++) {
+		if (*iter != INVALID_HANDLE_VALUE) {
+			DWORD write = (lstrlen(directory.c_str())+1) * sizeof(TCHAR);
+			DWORD written;
+			BOOL success = WriteFile(
+				*iter,
+				directory.c_str(),
+				write,
+				&written,
+				NULL);
+			if (directory == L"scan_end") {
+				DisconnectNamedPipe(*iter);
+				CloseHandle(*iter);
+			}
+		}
+	}
+	if (directory == L"scan_end") {
+		m_Pipes.clear();
+	}
+	ReleaseMutex(m_Mutex);
 }
 
-//DWORD WINAPI ThreadExecute(LPVOID lpParam)
-//{
-//	std::vector<std::wstring> picDirs;
-//	m_Scanner->SetScanTargetCallback(ScanTargetCallback);
-//	m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, picDirs, TRUE);
-//	m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, picDirs, FALSE);
-//
-//	LPTSTR endMsg = TEXT("scan_end");
-//	DWORD write = (lstrlen(endMsg)+1) * sizeof(TCHAR);
-//	DWORD written;
-//	WriteFile(
-//		m_Pipe,
-//		endMsg,
-//		write,
-//		&written,
-//		NULL);
-//	DisconnectNamedPipe(m_Pipe);
-//	return 0;
-//}
+DWORD WINAPI ThreadExecute(LPVOID lpParam)
+{
+	std::vector<std::wstring> picDirs;
+	m_Scanner->SetScanTargetCallback(ScanTargetCallback);
+	m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, picDirs, TRUE);
+	m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, picDirs, FALSE);
+
+	ScanTargetCallback(0,0,L"scan_end");
+	m_Executing = FALSE;
+	return 0;
+}
