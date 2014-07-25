@@ -5,9 +5,9 @@
 #define COMM_TIMEOUT 5000
 
 LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
-HANDLE m_Thread =INVALID_HANDLE_VALUE;
+HANDLE m_Thread = INVALID_HANDLE_VALUE;
 xl_ds_api::CScanner* m_Scanner = NULL;
-BOOL m_Executing = FALSE;
+BOOL m_ImgScanning = FALSE;
 std::vector<HANDLE> m_Pipes;
 HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
 
@@ -22,7 +22,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
-
     for(;;) {
 		HANDLE pipe = CreateNamedPipe(
 			m_PipeName,
@@ -97,8 +96,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			}
            if (success) {
                if (operateStr == L"scan_img") {
-                   if (!m_Executing) {
-                       m_Executing = TRUE;
+                   if (!m_ImgScanning) {
+                       m_ImgScanning = TRUE;
                        DWORD tid = 0;
                        m_Thread = CreateThread(
                            NULL,
@@ -111,15 +110,17 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
                    WaitForSingleObject(m_Mutex,INFINITE);
                    m_Pipes.push_back(pipe);
                    ReleaseMutex(m_Mutex);
+               } else {
+                   DisconnectNamedPipe(pipe);
+                   CloseHandle(pipe);
                }
            } else {
                DisconnectNamedPipe(pipe);
+               CloseHandle(pipe);
            }
         }
     }
-
     delete m_Scanner;
-
     return 0;
 }
 
@@ -156,6 +157,6 @@ DWORD WINAPI ThreadExecute(LPVOID lpParam)
 	m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, picDirs, FALSE);
 
 	ScanTargetCallback(0,0,L"scan_end");
-	m_Executing = FALSE;
+	m_ImgScanning = FALSE;
 	return 0;
 }
