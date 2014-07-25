@@ -63,14 +63,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			DWORD transBytes;
 			connected = GetOverlappedResult(pipe, &connOverl, &transBytes, FALSE);
 		}
-
-		if (connected) {
-			WaitForSingleObject(m_Mutex,INFINITE);
-			m_Pipes.push_back(pipe);
-			ReleaseMutex(m_Mutex);
-		}
-
-        if (connected && !m_Executing) {
+        if (connected) {
             BOOL success = FALSE;
 			std::wstring operateStr;
 			while(!success) {
@@ -102,17 +95,23 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 				}
 				operateStr = operate;
 			}
-            
-           if (success && operateStr == L"scan_img") {
-			   m_Executing = TRUE;
-			   DWORD tid = 0;
-			   m_Thread = CreateThread(
-				   NULL,
-				   0,
-				   ThreadExecute,
-				   NULL,
-				   0,
-				   &tid);
+           if (success) {
+               if (operateStr == L"scan_img") {
+                   if (!m_Executing) {
+                       m_Executing = TRUE;
+                       DWORD tid = 0;
+                       m_Thread = CreateThread(
+                           NULL,
+                           0,
+                           ThreadExecute,
+                           NULL,
+                           0,
+                           &tid);
+                   }
+                   WaitForSingleObject(m_Mutex,INFINITE);
+                   m_Pipes.push_back(pipe);
+                   ReleaseMutex(m_Mutex);
+               }
            } else {
                DisconnectNamedPipe(pipe);
            }
