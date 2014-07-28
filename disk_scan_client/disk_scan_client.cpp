@@ -13,6 +13,7 @@ HWND m_HWND;
 DWORD m_MainThreadID;
 
 DWORD WINAPI ScanImgThread(LPVOID lpParam);
+BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType);
 
 // todo
 // 封装独立线程处理连接、请求扫描、进度回调
@@ -43,6 +44,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		0,
 		&tid);
 
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
         if (ret == -1) {
             break;
@@ -51,8 +53,14 @@ int _tmain(int argc, _TCHAR* argv[])
             DispatchMessage(&msg); 
         }
     }
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
 
 	return msg.wParam;
+}
+
+BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType)
+{
+	return FALSE;
 }
 
 DWORD WINAPI ScanImgThread(LPVOID lpParam)
