@@ -2,14 +2,17 @@
 
 #define BUFF_SIZE 1024
 #define COMM_TIMEOUT 5000
+#define MSG_WND_CLASS L"DSMsgWndClass"
+#define MSG_WND_NAME L"DSMsgWnd"
 
 HANDLE m_Pipe = INVALID_HANDLE_VALUE;
 LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
 
 HINSTANCE m_Hinstance;
 HWND m_HWND;
-MSG m_Msg;
-BOOL m_Ret;
+DWORD m_MainThreadID;
+
+DWORD WINAPI ScanImgThread(LPVOID lpParam);
 
 // todo
 // 封装独立线程处理连接、请求扫描、进度回调
@@ -24,110 +27,111 @@ BOOL m_Ret;
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-    m_HWND = CreateWindowEx(
-        0,
-        L"MainWClass",
-        L"Main Window",
-        WS_OVERLAPPEDWINDOW |
-        WS_HSCROLL |
-        WS_VSCROLL,
-        0,
-        0,
-        0,
-        0,
-        (HWND) NULL,
-        (HMENU) NULL,
-        m_Hinstance,
-        NULL);
+	MSG msg;
+	BOOL ret;
 
-    ShowWindow(m_HWND, FALSE);
-    UpdateWindow(m_HWND);
+	m_Hinstance = GetModuleHandle(NULL);
+	m_HWND = GetConsoleWindow();
+	m_MainThreadID = GetCurrentThreadId();
 
-    while( (m_Ret = GetMessage( &m_Msg, NULL, 0, 0 )) != 0) {
-        if (m_Ret == -1) {
-            WM_USER + 100;
+	DWORD tid = 0;
+	CreateThread(
+		NULL,
+		0,
+		ScanImgThread,
+		NULL,
+		0,
+		&tid);
+
+    while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
+        if (ret == -1) {
+            break;
         } else {
-            TranslateMessage(&m_Msg); 
-            DispatchMessage(&m_Msg); 
+            TranslateMessage(&msg); 
+            DispatchMessage(&msg); 
         }
-    } 
+    }
 
-	//BOOL success = FALSE;
- //   for(;;) {
- //       m_Pipe = CreateFile(
- //           m_PipeName,
- //           GENERIC_READ |
- //           GENERIC_WRITE,
- //           0,
- //           NULL,
- //           OPEN_EXISTING,
- //           FILE_FLAG_OVERLAPPED,
- //           NULL);
- //       if (m_Pipe != INVALID_HANDLE_VALUE) {
- //           // 连接成功
- //           break;
- //       }
- //       if (GetLastError() == ERROR_FILE_NOT_FOUND) {
- //           // 没有扫描进程启动，启动扫描进程
- //           continue;
- //       }
- //       if (GetLastError() != ERROR_PIPE_BUSY) {
- //           return -1;
- //       }
- //       if (!WaitNamedPipe(m_PipeName, COMM_TIMEOUT)) {
- //           // 连接超时
- //           continue;
- //       }
- //   }
+	return msg.wParam;
+}
 
-	//DWORD dMode = PIPE_READMODE_MESSAGE;
-	//success = SetNamedPipeHandleState(
-	//	m_Pipe,
-	//	&dMode,
-	//	NULL,
-	//	NULL);
-	//if (!success) {
-	//	return -1;
-	//}
+DWORD WINAPI ScanImgThread(LPVOID lpParam)
+{
+	BOOL success = FALSE;
+	for(;;) {
+	   m_Pipe = CreateFile(
+		   m_PipeName,
+		   GENERIC_READ |
+		   GENERIC_WRITE,
+		   0,
+		   NULL,
+		   OPEN_EXISTING,
+		   FILE_FLAG_OVERLAPPED,
+		   NULL);
+	   if (m_Pipe != INVALID_HANDLE_VALUE) {
+		   // 连接成功
+		   break;
+	   }
+	   if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+		   // 没有扫描进程启动，启动扫描进程
+		   continue;
+	   }
+	   if (GetLastError() != ERROR_PIPE_BUSY) {
+		   return -1;
+	   }
+	   if (!WaitNamedPipe(m_PipeName, COMM_TIMEOUT)) {
+		   // 连接超时
+		   continue;
+	   }
+	}
 
- //   LPTSTR message = TEXT("scan_img");
- //   DWORD dWrite;
- //   DWORD dWritten;
-	//OVERLAPPED overl;
-	//HANDLE even = CreateEvent(NULL,TRUE,TRUE,NULL);
-	//overl.hEvent = even;
-	//overl.Offset = 0;
-	//overl.OffsetHigh = 0;
-	//dWrite = (lstrlen(message)+1) * sizeof(TCHAR);
-	//do {
-	//	success = WriteFile(
-	//		m_Pipe,
-	//		message,
-	//		dWrite,
-	//		&dWritten,
-	//		&overl);
-	//	WaitForSingleObject(even, COMM_TIMEOUT);
-	//	DWORD transBytes;
-	//	success = GetOverlappedResult(m_Pipe, &overl, &transBytes, FALSE);
-	//} while (!success);
+	DWORD dMode = PIPE_READMODE_MESSAGE;
+	success = SetNamedPipeHandleState(
+		m_Pipe,
+		&dMode,
+		NULL,
+		NULL);
+	if (!success) {
+		return -1;
+	}
 
- //   TCHAR buf[BUFF_SIZE];
- //   DWORD dRead;
-	//do {
-	//	success = ReadFile(
-	//		m_Pipe,
-	//		buf,
-	//		BUFF_SIZE*sizeof(TCHAR),
-	//		&dRead,
-	//		NULL);
-	//	std::wstring path = buf;
-	//	_tprintf(TEXT("scan : %s \n"), path.c_str());
-	//	if (path == L"scan_end") {
-	//		break;
-	//	}
-	//} while (success);
+	LPTSTR message = TEXT("scan_img");
+	DWORD dWrite;
+	DWORD dWritten;
+	OVERLAPPED overl;
+	HANDLE even = CreateEvent(NULL,TRUE,TRUE,NULL);
+	overl.hEvent = even;
+	overl.Offset = 0;
+	overl.OffsetHigh = 0;
+	dWrite = (lstrlen(message)+1) * sizeof(TCHAR);
+	do {
+		success = WriteFile(
+			m_Pipe,
+			message,
+			dWrite,
+			&dWritten,
+			&overl);
+		WaitForSingleObject(even, COMM_TIMEOUT);
+		DWORD transBytes;
+		success = GetOverlappedResult(m_Pipe, &overl, &transBytes, FALSE);
+	} while (!success);
 
-	//CloseHandle(m_Pipe);
+	TCHAR buf[BUFF_SIZE];
+	DWORD dRead;
+	do {
+		success = ReadFile(
+			m_Pipe,
+			buf,
+			BUFF_SIZE*sizeof(TCHAR),
+			&dRead,
+			NULL);
+		std::wstring path = buf;
+		BOOL ret = PostThreadMessage(m_MainThreadID, 1522, 200, 100);
+		//_tprintf(TEXT("scan : %s \n"), path.c_str());
+		if (path == L"scan_end") {
+			break;
+		}
+	} while (success);
 
-	return 0;
+	CloseHandle(m_Pipe);
 }

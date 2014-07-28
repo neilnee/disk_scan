@@ -4,12 +4,12 @@
 #define BUFF_SIZE 1024
 #define COMM_TIMEOUT 5000
 
+BOOL m_ImgScanning = FALSE;
 LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
 HANDLE m_Thread = INVALID_HANDLE_VALUE;
-xl_ds_api::CScanner* m_Scanner = NULL;
-BOOL m_ImgScanning = FALSE;
-std::vector<HANDLE> m_Pipes;
 HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
+xl_ds_api::CScanner* m_Scanner = NULL;
+std::vector<HANDLE> m_Pipes;
 
 void ScanTargetCallback(INT event, INT scan, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
