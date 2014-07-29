@@ -146,6 +146,9 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         ReleaseMutex(m_IPSMutex);
 
         if (path == L"scan_end") {
+            WaitForSingleObject(m_IPSMutex,INFINITE);
+            m_NotifyThreadIDs.clear();
+            ReleaseMutex(m_IPSMutex);
             break;
         }
     } while (success);
