@@ -1,5 +1,5 @@
-#ifndef _DISK_SCAN_TOOL_H_
-#define _DISK_SCAN_TOOL_H_
+#ifndef _DISK_SCANNER_H_
+#define _DISK_SCANNER_H_
 
 #include <windows.h>
 #include <vector>
@@ -14,7 +14,7 @@
 
 static const DWORD BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {
-    L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff"};
+    L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
 
 namespace xl_ds_api
 {

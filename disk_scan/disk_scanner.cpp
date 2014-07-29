@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "disk_scan_tool.h"
+#include "disk_scanner.h"
 
 #include <algorithm>
 

@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "disk_scan_tool.h"
+#include "disk_scanner.h"
 
 #define BUFF_SIZE 1024
 #define COMM_TIMEOUT 5000
