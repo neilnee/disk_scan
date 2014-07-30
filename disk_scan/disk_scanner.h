@@ -11,6 +11,7 @@
 
 #define SCAN_START 1
 #define SCAN_FOUND 2
+#define SCAN_FINISH 3
 
 static const DWORD BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {

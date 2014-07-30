@@ -146,7 +146,6 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 		handle = FindFirstFile(L"*", &fileData);
 		if (handle != INVALID_HANDLE_VALUE) {
 			BOOL finish = FALSE;
-            BOOL found = FALSE;
             INT targetCount = 0;
             INT otherCount = 0;
 			do {
@@ -158,28 +157,22 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
                         searchDir.push_back(directory+strFileName);
                     } else {
                         // 对文件进行分析操作，以判定该目录是否是要找的目标目录
-                        if (!found) {
-                            std::wstring::size_type suffixPos = strFileName.rfind(L".");
-                            if (suffixPos != std::wstring::npos) {
-                                std::wstring suffix = strFileName.substr(suffixPos);
-								std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
-                                if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
-                                    otherCount++;
-                                } else {
-                                    targetCount++;
-                                }
-                            }
-                            // 目标文件夹的内层判定判定规则，遍历中判定
-                            if (targetCount > 50 && otherCount == 0) {
-                                found = TRUE;
+                        std::wstring::size_type suffixPos = strFileName.rfind(L".");
+                        if (suffixPos != std::wstring::npos) {
+                            std::wstring suffix = strFileName.substr(suffixPos);
+                            std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
+                            if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
+                                otherCount++;
+                            } else {
+                                targetCount++;
                             }
                         }
                     }
                 }
 				finish = !FindNextFile(handle, &fileData);
 			} while (!finish);
-            // 目标文件夹的外层判定判定规则，遍历完后判定
-            if(found || (targetCount > 20 && otherCount == 0)) {
+            // 遍历完后判定是否属于图片文件夹
+            if(targetCount > 5 && ((targetCount * 10) / (targetCount + otherCount)) > 9) {
                 PushBackDir(targetDir, directory);
 				if (m_ScanTargetCallback != NULL) {
 					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, directory);
