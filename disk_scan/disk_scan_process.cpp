@@ -160,16 +160,15 @@ void ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
 
 DWORD WINAPI ThreadExecute(LPVOID lpParam)
 {
-    if (m_Scanner->m_Done) {
-        std::vector<std::wstring>::iterator iter;
-        for (iter = m_Scanner->m_ImgDirectorys.begin(); iter != m_Scanner->m_ImgDirectorys.end(); iter++) {
-            ScanTargetCallback(SCAN_FOUND, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
-        }
-    } else {
+    if (!m_Scanner->m_Done) {
         m_Scanner->SetScanTargetCallback(ScanTargetCallback);
         m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, m_Scanner->m_ImgDirectorys, TRUE);
         m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, m_Scanner->m_ImgDirectorys, FALSE);
         m_Scanner->m_Done = TRUE;
+    }
+    std::vector<std::wstring>::iterator iter;
+    for (iter = m_Scanner->m_ImgDirectorys.begin(); iter != m_Scanner->m_ImgDirectorys.end(); iter++) {
+        ScanTargetCallback(SCAN_RESULT, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
     }
 	ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
 	m_ImgScanning = FALSE;

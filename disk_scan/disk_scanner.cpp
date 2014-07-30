@@ -18,14 +18,7 @@ CScanner::~CScanner()
 
 void CScanner::Init()
 {
-    m_TotalDirs = 0;
-	m_ScanDirs = 0;
-    m_Done = FALSE;
-	m_BaseDirs.clear();
-	m_PriorityDirs.clear();
-	m_IgnoreDirs.clear();
-	m_ScanTargetCallback = NULL;
-
+    UnInit();
 	INT ignores[] = IGNORE_DIRS;
 	INT prioritys[] = PRIORITY_DIRS;
 	TCHAR szPath[MAX_PATH];
@@ -34,8 +27,9 @@ void CScanner::Init()
 	for (INT i=0; i<size; i++) {
 		SHGetFolderPath(NULL, prioritys[i], NULL, 0, szPath);
 		std::wstring directory = szPath;
-		PushBackDir(m_PriorityDirs, directory);
-        m_TotalDirs++;
+        if (PushBackDir(m_PriorityDirs, directory)) {
+            m_FirstDirs ++;
+        }
 	}
 	size  = sizeof(ignores)/sizeof(ignores[0]);
 	for (INT i=0; i<size; i++) {
@@ -43,6 +37,7 @@ void CScanner::Init()
 		std::wstring directory = szPath;
 		PushBackDir(m_IgnoreDirs, directory);
 	}
+    m_TotalDirs = m_FirstDirs;
 }
 
 void CScanner::UnInit()
@@ -50,20 +45,24 @@ void CScanner::UnInit()
     m_Done = FALSE;
 	m_ScanDirs = 0;
     m_TotalDirs = 0;
+    m_FirstDirs = 0;
 	m_PriorityDirs.clear();
 	m_IgnoreDirs.clear();
 	m_BaseDirs.clear();
 	m_ScanTargetCallback = NULL;
 }
 
-void CScanner::PushBackDir(std::vector<std::wstring> &dirList, std::wstring &directory) 
+BOOL CScanner::PushBackDir(std::vector<std::wstring> &dirList, std::wstring &directory) 
 {
+    BOOL result = FALSE;
 	if (directory.rfind(L"\\") != directory.length() -1) {
 		directory.append(L"\\");
 	}
 	if (std::find(dirList.begin(), dirList.end(), directory) == dirList.end()) {
 		dirList.push_back(directory);
+        result = TRUE;
 	}
+    return result;
 }
 
 void CScanner::InitBaseDir()
@@ -103,8 +102,9 @@ void CScanner::InitBaseDir()
 							|| fileName == L"Program Files (x86)") {
 								PushBackDir(m_IgnoreDirs, directory);
 						}
-						PushBackDir(m_BaseDirs, directory);
-                        m_TotalDirs++;
+                        if (PushBackDir(m_BaseDirs, directory)) {
+                            m_FirstDirs++;
+                        }
                     }
                     finish = !FindNextFile(handle, &fileData);
                 } while (!finish);
@@ -113,6 +113,7 @@ void CScanner::InitBaseDir()
         } while (*p);
         FindClose(handle);
     }
+    m_TotalDirs = m_FirstDirs;
 }
 
 void CScanner::SetScanTargetCallback(ScanTargetCallback callback)
@@ -123,7 +124,7 @@ void CScanner::SetScanTargetCallback(ScanTargetCallback callback)
 void CScanner::ClearResult()
 {
     m_ScanDirs = 0;
-    m_TotalDirs = 0;
+    m_TotalDirs = m_FirstDirs;
     m_Done = FALSE;
     m_ImgDirectorys.clear();
 }

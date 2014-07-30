@@ -11,7 +11,8 @@
 
 #define SCAN_START 1
 #define SCAN_FOUND 2
-#define SCAN_FINISH 3
+#define SCAN_RESULT 3
+#define SCAN_FINISH 4
 
 static const DWORD PATH_BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {
@@ -41,7 +42,7 @@ namespace xl_ds_api
 
         void ClearResult();
 
-		/**
+        /**
 		 * 根据规则扫描出主要的目标类型存储目录
 		 * @param baseDirs : in, 扫描的目标目录列表
 		 * @param targetDir : out, 扫描到的目标类型存储目录列表
@@ -63,7 +64,7 @@ namespace xl_ds_api
 		/**
 		 * 添加目录的辅助方法
 		 */
-		void PushBackDir(std::vector<std::wstring> &dirList, std::wstring &directory);
+		BOOL PushBackDir(std::vector<std::wstring> &dirList, std::wstring &directory);
 
 		/**
 		 * 扫描出本地各磁盘的一级目录
@@ -81,6 +82,7 @@ namespace xl_ds_api
     private :
 		ScanTargetCallback m_ScanTargetCallback;
 		std::vector<std::wstring> m_IgnoreDirs;
+        INT m_FirstDirs;
     };
 }
 

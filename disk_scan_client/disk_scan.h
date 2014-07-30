@@ -9,6 +9,11 @@
 #define SCAN_INFO_FOUND_PATH 102
 #define SCAN_INFO_FINISH 103
 
+#define SCAN_START 1
+#define SCAN_FOUND 2
+#define SCAN_RESULT 3
+#define SCAN_FINISH 4
+
 namespace xl_ds_api
 {
     class CScanInfo
