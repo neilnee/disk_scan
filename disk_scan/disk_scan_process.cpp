@@ -147,6 +147,7 @@ void ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
 				&written,
 				NULL);
 			if (eventCode == SCAN_FINISH) {
+				FlushFileBuffers(*iter);
 				DisconnectNamedPipe(*iter);
 				CloseHandle(*iter);
 			}

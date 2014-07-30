@@ -37,11 +37,9 @@ int _tmain(int argc, _TCHAR* argv[])
                 }
                 xl_ds_api::CScanInfo info = *infoPtr;
                 delete infoPtr;
-                if (info.m_Info == SCAN_INFO_START_PATH) {
-                    _tprintf(TEXT("scan : %s \n"), info.m_Path.c_str());
-                } else if (info.m_Info == SCAN_INFO_FINISH) {
-                    _tprintf(TEXT("scan finish"));
-                }
+
+				_tprintf(TEXT("%d, %d, %d, %s \n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
+
             } else {
                 TranslateMessage(&msg); 
                 DispatchMessage(&msg);

@@ -131,35 +131,40 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
             BUFF_SIZE*sizeof(TCHAR),
             &dRead,
             NULL);
-
         std::wstring data = buf;
-        /*INT offset = 0;
-        INT length = data.find(L"|");
-        INT eventCode = _ttoi((data.substr(offset, length)).c_str());
-
-        offset = length + 1;
-        length = data.find(L"|", offset) - offset;
-        INT scanCount = _ttoi((data.substr(offset, length)).c_str());
-        offset = length + 1;
-        length = data.find(L"|", length + 1) - offset;
-        INT totalCount = _ttoi((data.substr(offset, length)).c_str());
-        std::wstring path = &data[offset];*/
+		std::wstring path;
+		INT eventCode = 0;
+		INT scanCount = 0;
+		INT totalCount = 0;
+		std::wstring::size_type offset = 0;
+        std::wstring::size_type length = 0;
+		if ((length = data.find(L"|")) != std::wstring::npos) {
+			eventCode = _ttoi((data.substr(offset, length)).c_str());
+			offset = offset + length + 1;
+		}
+		if ((length = data.find(L"|", offset)) != std::wstring::npos) {
+			scanCount = _ttoi((data.substr(offset, length - offset)).c_str());
+			offset = length + 1;
+		}
+		if ((length = data.find(L"|", offset)) != std::wstring::npos) {
+			totalCount = _ttoi((data.substr(offset, length - offset)).c_str());
+			offset = length + 1;
+		}
+        path = &data[offset];
 
         WaitForSingleObject(m_IPSMutex,INFINITE);
         std::vector<DWORD>::iterator iter;
         for (iter = m_NotifyThreadIDs.begin(); iter != m_NotifyThreadIDs.end(); iter++) {
             xl_ds_api::CScanInfo* scanInfo = new xl_ds_api::CScanInfo();
-            if (data != L"scan_end") {
-                scanInfo->m_Info = SCAN_INFO_START_PATH;
-                scanInfo->m_Path = data;
-            } else {
-                scanInfo->m_Info = SCAN_INFO_FINISH;
-            }
+            scanInfo->m_EventCode = eventCode;
+			scanInfo->m_ScanCount = scanCount;
+			scanInfo->m_TotalCount = totalCount;
+			scanInfo->m_Path = path;
             BOOL ret = PostThreadMessage(*iter, SCAN_MSG_IMG_PROCESS, reinterpret_cast<WPARAM>(scanInfo), 0);
         }
         ReleaseMutex(m_IPSMutex);
 
-        if (data == L"scan_end") {
+        if (eventCode == SCAN_FINISH) {
             WaitForSingleObject(m_IPSMutex,INFINITE);
             m_NotifyThreadIDs.clear();
             ReleaseMutex(m_IPSMutex);

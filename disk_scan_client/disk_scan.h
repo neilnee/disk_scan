@@ -5,10 +5,6 @@
 
 #define SCAN_MSG_IMG_PROCESS WM_USER + 500
 
-#define SCAN_INFO_START_PATH 101
-#define SCAN_INFO_FOUND_PATH 102
-#define SCAN_INFO_FINISH 103
-
 #define SCAN_START 1
 #define SCAN_FOUND 2
 #define SCAN_RESULT 3
@@ -23,7 +19,9 @@ namespace xl_ds_api
         ~CScanInfo() {}
 
     public :
-        INT m_Info;
+        INT m_EventCode;
+		INT m_ScanCount;
+		INT m_TotalCount;
         std::wstring m_Path;
     };
 
