@@ -2,7 +2,6 @@
 #define _DISK_SCAN_H_
 
 #define SCAN_MSG_IMG_PROCESS WM_USER + 500
-#define SCAN_MSG_EXIT WM_USER + 501
 
 #define SCAN_REQUEST_IMG L"scan_img"
 #define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"

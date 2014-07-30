@@ -35,8 +35,6 @@ int _tmain(int argc, _TCHAR* argv[])
 					delete infoPtr;
 
 					_tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
-				} else if (msg.message == SCAN_MSG_EXIT) {
-					_tprintf(TEXT("EXIT !\n"));
 				}
             } else {
                 TranslateMessage(&msg); 
