@@ -131,15 +131,27 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
             BUFF_SIZE*sizeof(TCHAR),
             &dRead,
             NULL);
-        std::wstring path = buf;
+
+        std::wstring data = buf;
+        /*INT offset = 0;
+        INT length = data.find(L"|");
+        INT eventCode = _ttoi((data.substr(offset, length)).c_str());
+
+        offset = length + 1;
+        length = data.find(L"|", offset) - offset;
+        INT scanCount = _ttoi((data.substr(offset, length)).c_str());
+        offset = length + 1;
+        length = data.find(L"|", length + 1) - offset;
+        INT totalCount = _ttoi((data.substr(offset, length)).c_str());
+        std::wstring path = &data[offset];*/
 
         WaitForSingleObject(m_IPSMutex,INFINITE);
         std::vector<DWORD>::iterator iter;
         for (iter = m_NotifyThreadIDs.begin(); iter != m_NotifyThreadIDs.end(); iter++) {
             xl_ds_api::CScanInfo* scanInfo = new xl_ds_api::CScanInfo();
-            if (path != L"scan_end") {
+            if (data != L"scan_end") {
                 scanInfo->m_Info = SCAN_INFO_START_PATH;
-                scanInfo->m_Path = path;
+                scanInfo->m_Path = data;
             } else {
                 scanInfo->m_Info = SCAN_INFO_FINISH;
             }
@@ -147,7 +159,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         }
         ReleaseMutex(m_IPSMutex);
 
-        if (path == L"scan_end") {
+        if (data == L"scan_end") {
             WaitForSingleObject(m_IPSMutex,INFINITE);
             m_NotifyThreadIDs.clear();
             ReleaseMutex(m_IPSMutex);
