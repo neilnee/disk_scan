@@ -32,7 +32,7 @@ namespace xl_ds_api
         ~CDiskScan();
 
     public :
-        void ScanImgInProcess(DWORD notifyThreadID);
+        VOID ScanImgInProcess(DWORD notifyThreadID);
 
     };
 }

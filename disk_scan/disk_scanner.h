@@ -38,9 +38,9 @@ namespace xl_ds_api
 		/**
 		 * 添加回调接口
 		 */
-		void SetScanTargetCallback(ScanTargetCallback callback);
+		VOID SetScanTargetCallback(ScanTargetCallback callback);
 
-        void ClearResult();
+        VOID ClearResult();
 
         /**
 		 * 根据规则扫描出主要的目标类型存储目录
@@ -48,18 +48,18 @@ namespace xl_ds_api
 		 * @param targetDir : out, 扫描到的目标类型存储目录列表
 		 * @param priority : in, 是否是扫描优先目录
 		 */
-		void ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority);
+		VOID ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority);
 
 	private :
 		/**
 		 * 初始化
 		 */
-		void Init();
+		VOID Init();
 
 		/**
 		 * 反初始化
 		 */
-		void UnInit();
+		VOID UnInit();
 
 		/**
 		 * 添加目录的辅助方法
@@ -69,7 +69,7 @@ namespace xl_ds_api
 		/**
 		 * 扫描出本地各磁盘的一级目录
 		 */
-		void InitBaseDir();
+		VOID InitBaseDir();
 
     public :
         std::vector<std::wstring> m_BaseDirs;

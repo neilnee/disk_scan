@@ -27,7 +27,7 @@ CDiskScan::~CDiskScan()
     m_NotifyThreadIDs.clear();
 }
 
-void CDiskScan::ScanImgInProcess(DWORD notifyThreadID)
+VOID CDiskScan::ScanImgInProcess(DWORD notifyThreadID)
 {
     DWORD* pNotifyThreadID = new DWORD(notifyThreadID);
     DWORD threadID;

@@ -16,7 +16,7 @@ CScanner::~CScanner()
 	UnInit();
 }
 
-void CScanner::Init()
+VOID CScanner::Init()
 {
     UnInit();
 	INT ignores[] = IGNORE_DIRS;
@@ -40,7 +40,7 @@ void CScanner::Init()
     m_TotalDirs = m_FirstDirs;
 }
 
-void CScanner::UnInit()
+VOID CScanner::UnInit()
 {
     m_Done = FALSE;
 	m_ScanDirs = 0;
@@ -65,7 +65,7 @@ BOOL CScanner::PushBackDir(std::vector<std::wstring> &dirList, std::wstring &dir
     return result;
 }
 
-void CScanner::InitBaseDir()
+VOID CScanner::InitBaseDir()
 {
     TCHAR szTemp[PATH_BUF_SIZE];
     szTemp[0] = '\0';
@@ -116,12 +116,12 @@ void CScanner::InitBaseDir()
     m_TotalDirs = m_FirstDirs;
 }
 
-void CScanner::SetScanTargetCallback(ScanTargetCallback callback)
+VOID CScanner::SetScanTargetCallback(ScanTargetCallback callback)
 {
 	m_ScanTargetCallback = callback;
 }
 
-void CScanner::ClearResult()
+VOID CScanner::ClearResult()
 {
     m_ScanDirs = 0;
     m_TotalDirs = m_FirstDirs;
@@ -129,7 +129,7 @@ void CScanner::ClearResult()
     m_ImgDirectorys.clear();
 }
 
-void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
+VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
 {
 	if (baseDir == NULL || baseDir->size() <= 0) {
 		return;

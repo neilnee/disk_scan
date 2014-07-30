@@ -13,8 +13,9 @@ HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
 xl_ds_api::CScanner* m_Scanner = NULL;
 std::vector<HANDLE> m_Pipes;
 
-void ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
+VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
+BOOL HandleReuqest(std::wstring request);
 
 int APIENTRY _tWinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -66,7 +67,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 		}
         if (connected) {
             BOOL success = FALSE;
-			std::wstring operateStr;
+			std::wstring request;
 			while(!success) {
 				OVERLAPPED readOverl;
 				HANDLE readEvent;
@@ -77,7 +78,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 				readOverl.hEvent = readEvent;
 				readOverl.Offset = 0;
 				readOverl.OffsetHigh = 0;
-				operateStr.clear();
+				request.clear();
 				success = ReadFile(
 					pipe,
 					operate,
@@ -94,24 +95,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					}
 					success = GetOverlappedResult(pipe, &readOverl, &transByts, FALSE);
 				}
-				operateStr = operate;
+				request = operate;
 			}
            if (success) {
-               if (operateStr == SCAN_REQUEST_IMG || operateStr == SCAN_REQUEST_IMG_AFREAH) {
-                   if (!m_ImgScanning) {
-                       m_ImgScanning = TRUE;
-                       if (operateStr == SCAN_REQUEST_IMG_AFREAH) {
-                           m_Scanner->ClearResult();
-                       }
-                       DWORD tid = 0;
-                       m_Thread = CreateThread(
-                           NULL,
-                           0,
-                           ThreadExecute,
-                           NULL,
-                           0,
-                           &tid);
-                   }
+               if (HandleReuqest(request)) {
                    WaitForSingleObject(m_Mutex,INFINITE);
                    m_Pipes.push_back(pipe);
                    ReleaseMutex(m_Mutex);
@@ -129,7 +116,30 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     return 0;
 }
 
-void ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory) 
+BOOL HandleReuqest(std::wstring request)
+{
+	BOOL result = FALSE;
+	if (request == SCAN_REQUEST_IMG || request == SCAN_REQUEST_IMG_AFREAH) {
+		if (!m_ImgScanning) {
+			m_ImgScanning = TRUE;
+			if (request == SCAN_REQUEST_IMG_AFREAH) {
+				m_Scanner->ClearResult();
+			}
+			DWORD tid = 0;
+			m_Thread = CreateThread(
+				NULL,
+				0,
+				ThreadExecute,
+				NULL,
+				0,
+				&tid);
+		}
+		result = TRUE;
+	}
+	return result;
+}
+
+VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory) 
 {
     wchar_t buf[PATH_BUF_SIZE] = {0};
     wsprintf(buf, L"%d|%d|%d|%s", eventCode, scanCount, totalCount, directory.c_str());
