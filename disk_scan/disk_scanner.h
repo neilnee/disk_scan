@@ -34,14 +34,14 @@ namespace xl_ds_api
     public :
         CScanner();
         virtual ~CScanner();
-
 		/**
 		 * 添加回调接口
 		 */
 		VOID SetScanTargetCallback(ScanTargetCallback callback);
-
+		/**
+		 * 清空缓存的扫描结果
+		 */
         VOID ClearResult();
-
         /**
 		 * 根据规则扫描出主要的目标类型存储目录
 		 * @param baseDirs : in, 扫描的目标目录列表
@@ -49,28 +49,17 @@ namespace xl_ds_api
 		 * @param priority : in, 是否是扫描优先目录
 		 */
 		VOID ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority);
-
 	private :
-		/**
-		 * 初始化
-		 */
 		VOID Init();
-
-		/**
-		 * 反初始化
-		 */
 		VOID UnInit();
-
 		/**
 		 * 添加目录的辅助方法
 		 */
 		BOOL PushBackDir(std::vector<std::wstring> &dirList, std::wstring &directory);
-
 		/**
 		 * 扫描出本地各磁盘的一级目录
 		 */
 		VOID InitBaseDir();
-
     public :
         std::vector<std::wstring> m_BaseDirs;
         std::vector<std::wstring> m_PriorityDirs;
@@ -78,7 +67,6 @@ namespace xl_ds_api
         INT m_ScanDirs;
         INT m_TotalDirs;
         BOOL m_Done;
-
     private :
 		ScanTargetCallback m_ScanTargetCallback;
 		std::vector<std::wstring> m_IgnoreDirs;

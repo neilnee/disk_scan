@@ -3,14 +3,12 @@
 #include <vector>
 #include <ShlObj.h>
 
-#define BUFF_SIZE 1024
-#define TIMEOUT 5000
+#define PIPE_BUF_SIZE 1024
+#define TIMEOUT 12000
 #define SCAN_REQUEST_IMG L"scan_img"
 #define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
 
 using namespace xl_ds_api;
-
-LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
 
 std::vector<DWORD> m_NotifyThreadIDs;
 BOOL m_ImgProcessScanning = FALSE;
@@ -43,19 +41,20 @@ VOID CDiskScan::ScanImgInProcess(DWORD notifyThreadID)
 DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
 {
     BOOL success = FALSE;
+	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
+	DWORD* threadIDPtr = (DWORD*) lpParam;
+	if (threadIDPtr == NULL) {
+		return -1;
+	}
+	DWORD threadID = *threadIDPtr;
+	delete threadIDPtr;
 
-    WaitForSingleObject(m_IPSMutex,INFINITE);
-    DWORD* threadIDPtr = (DWORD*) lpParam;
-    if (threadIDPtr == NULL) {
-        return -1;
-    }
-    DWORD threadID = *threadIDPtr;
-    delete threadIDPtr;
+    WaitForSingleObject(m_IPSMutex, INFINITE);
     m_NotifyThreadIDs.push_back(threadID);
-    if(!m_ImgProcessScanning) {
-        m_ImgProcessScanning = TRUE;
+    if(m_ImgProcessScanning) {
+		success = TRUE;
     } else {
-        success = TRUE;
+		m_ImgProcessScanning = TRUE;
     }
     ReleaseMutex(m_IPSMutex);
 
@@ -66,7 +65,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
     HANDLE pipe = INVALID_HANDLE_VALUE;
     for(;;) {
         pipe = CreateFile(
-            m_PipeName,
+            pipeName,
             GENERIC_READ |
             GENERIC_WRITE,
             0,
@@ -85,7 +84,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         if (GetLastError() != ERROR_PIPE_BUSY) {
             return -1;
         }
-        if (!WaitNamedPipe(m_PipeName, TIMEOUT)) {
+        if (!WaitNamedPipe(pipeName, TIMEOUT)) {
             // Á¬½Ó³¬Ê±
             continue;
         }
@@ -122,13 +121,13 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         success = GetOverlappedResult(pipe, &overl, &transBytes, FALSE);
     } while (!success);
 
-    TCHAR buf[BUFF_SIZE];
+    TCHAR buf[PIPE_BUF_SIZE];
     DWORD dRead;
     do {
         success = ReadFile(
             pipe,
             buf,
-            BUFF_SIZE*sizeof(TCHAR),
+            PIPE_BUF_SIZE*sizeof(TCHAR),
             &dRead,
             NULL);
         std::wstring data = buf;
@@ -152,7 +151,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
 		}
         path = &data[offset];
 
-        WaitForSingleObject(m_IPSMutex,INFINITE);
+        WaitForSingleObject(m_IPSMutex, INFINITE);
         std::vector<DWORD>::iterator iter;
         for (iter = m_NotifyThreadIDs.begin(); iter != m_NotifyThreadIDs.end(); iter++) {
             xl_ds_api::CScanInfo* scanInfo = new xl_ds_api::CScanInfo();
@@ -160,12 +159,12 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
 			scanInfo->m_ScanCount = scanCount;
 			scanInfo->m_TotalCount = totalCount;
 			scanInfo->m_Path = path;
-            BOOL ret = PostThreadMessage(*iter, SCAN_MSG_IMG_PROCESS, reinterpret_cast<WPARAM>(scanInfo), 0);
+            PostThreadMessage(*iter, SCAN_MSG_IMG_PROCESS, reinterpret_cast<WPARAM>(scanInfo), 0);
         }
         ReleaseMutex(m_IPSMutex);
 
         if (eventCode == SCAN_FINISH) {
-            WaitForSingleObject(m_IPSMutex,INFINITE);
+            WaitForSingleObject(m_IPSMutex, INFINITE);
             m_NotifyThreadIDs.clear();
             ReleaseMutex(m_IPSMutex);
             break;

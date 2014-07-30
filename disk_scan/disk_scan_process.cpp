@@ -2,12 +2,11 @@
 #include "disk_scanner.h"
 
 #define PIPE_BUF_SIZE 1024
-#define COMM_TIMEOUT 5000
+#define TIMEOUT 12000
 #define SCAN_REQUEST_IMG L"scan_img"
 #define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
 
 BOOL m_ImgScanning = FALSE;
-LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
 HANDLE m_Thread = INVALID_HANDLE_VALUE;
 HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
 xl_ds_api::CScanner* m_Scanner = NULL;
@@ -25,9 +24,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
+	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
     for(;;) {
 		HANDLE pipe = CreateNamedPipe(
-			m_PipeName,
+			pipeName,
 			PIPE_ACCESS_DUPLEX |
 			FILE_FLAG_OVERLAPPED,
 			PIPE_TYPE_MESSAGE |
@@ -54,7 +54,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 
 		if (!connected) {
 			// 如果没有客户端连接，进入超时等待
-			DWORD waitRet = WaitForSingleObject(connEvent, COMM_TIMEOUT);
+			DWORD waitRet = WaitForSingleObject(connEvent, TIMEOUT);
 			if (waitRet == WAIT_TIMEOUT) {
 				DisconnectNamedPipe(pipe);
 				CloseHandle(pipe);
@@ -87,7 +87,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					&readOverl);
 				if (!success) {
 					DWORD transByts;
-					DWORD waitResult = WaitForSingleObject(readEvent, COMM_TIMEOUT);
+					DWORD waitResult = WaitForSingleObject(readEvent, TIMEOUT);
 					if (waitResult == WAIT_TIMEOUT) {
 						// 等待客户端命令超时
 						// 判定当前是否有工作线程运行，如果没有工作线程运行，则超时退出，否则继续等待

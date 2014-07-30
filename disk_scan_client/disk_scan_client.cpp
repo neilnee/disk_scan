@@ -1,16 +1,14 @@
 #include "stdafx.h"
 #include "disk_scan.h"
 
-HINSTANCE m_Hinstance;
-HWND m_HWND;
 DWORD m_MainThreadID;
 
 // todo
 // 处理启动逻辑，增加调起扫描进程的逻辑
 // 扫描进程增加自动退出的逻辑
-// 增加扫描监控目录变化的模块
 // 增加扫描进程对命令行参数的处理
 // 处理对最近访问目录的优先扫描
+// 增加扫描监控目录变化的模块
 // 目录监控时对删除超过一定时间的记录的清理
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -18,8 +16,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	MSG msg;
 	BOOL ret;
 
-	m_Hinstance = GetModuleHandle(NULL);
-	m_HWND = GetConsoleWindow();
 	m_MainThreadID = GetCurrentThreadId();
 
     xl_ds_api::CDiskScan* diskScan = new xl_ds_api::CDiskScan();
@@ -37,7 +33,7 @@ int _tmain(int argc, _TCHAR* argv[])
                 xl_ds_api::CScanInfo info = *infoPtr;
                 delete infoPtr;
 
-				_tprintf(TEXT("%d, %d, %d, %s \n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
+				//_tprintf(TEXT("%d, %d, %d, %s \n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
 
             } else {
                 TranslateMessage(&msg); 

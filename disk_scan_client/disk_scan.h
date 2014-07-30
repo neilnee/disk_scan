@@ -16,8 +16,7 @@ namespace xl_ds_api
     {
     public :
         CScanInfo() {} 
-        ~CScanInfo() {}
-
+        virtual ~CScanInfo() {}
     public :
         INT m_EventCode;
 		INT m_ScanCount;
@@ -29,11 +28,9 @@ namespace xl_ds_api
     {
     public :
         CDiskScan();
-        ~CDiskScan();
-
+        virtual ~CDiskScan();
     public :
         VOID ScanImgInProcess(DWORD notifyThreadID);
-
     };
 }
 
