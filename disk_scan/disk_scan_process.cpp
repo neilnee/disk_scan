@@ -1,8 +1,10 @@
 #include "stdafx.h"
 #include "disk_scanner.h"
 
-#define BUFF_SIZE 1024
+#define PIPE_BUF_SIZE 1024
 #define COMM_TIMEOUT 5000
+#define SCAN_REQUEST_IMG L"scan_img"
+#define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
 
 BOOL m_ImgScanning = FALSE;
 LPTSTR m_PipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
@@ -11,7 +13,7 @@ HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
 xl_ds_api::CScanner* m_Scanner = NULL;
 std::vector<HANDLE> m_Pipes;
 
-void ScanTargetCallback(INT event, INT scan, std::wstring directory);
+void ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
 
 int APIENTRY _tWinMain(HINSTANCE hInstance,
@@ -31,8 +33,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			PIPE_READMODE_MESSAGE |
 			PIPE_WAIT,
 			PIPE_UNLIMITED_INSTANCES,
-			BUFF_SIZE,
-			BUFF_SIZE,
+			PIPE_BUF_SIZE,
+			PIPE_BUF_SIZE,
 			0,
 			NULL);
         if (pipe == INVALID_HANDLE_VALUE) {
@@ -69,7 +71,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 				OVERLAPPED readOverl;
 				HANDLE readEvent;
 				HANDLE heap = GetProcessHeap();
-				TCHAR* operate = (TCHAR*)HeapAlloc(heap, 0, BUF_SIZE*sizeof(TCHAR));
+				TCHAR* operate = (TCHAR*)HeapAlloc(heap, 0, PATH_BUF_SIZE*sizeof(TCHAR));
 				DWORD readBytes = 0;
 				readEvent = CreateEvent(NULL, TRUE, TRUE, NULL);
 				readOverl.hEvent = readEvent;
@@ -79,7 +81,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 				success = ReadFile(
 					pipe,
 					operate,
-					BUF_SIZE*sizeof(TCHAR),
+					PATH_BUF_SIZE*sizeof(TCHAR),
 					&readBytes,
 					&readOverl);
 				if (!success) {
@@ -95,9 +97,12 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 				operateStr = operate;
 			}
            if (success) {
-               if (operateStr == L"scan_img") {
+               if (operateStr == SCAN_REQUEST_IMG || operateStr == SCAN_REQUEST_IMG_AFREAH) {
                    if (!m_ImgScanning) {
                        m_ImgScanning = TRUE;
+                       if (operateStr == SCAN_REQUEST_IMG_AFREAH) {
+                           m_Scanner->ClearResult();
+                       }
                        DWORD tid = 0;
                        m_Thread = CreateThread(
                            NULL,
@@ -124,26 +129,30 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     return 0;
 }
 
-void ScanTargetCallback(INT event, INT scan, std::wstring directory) {
+void ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory) 
+{
+    wchar_t buf[PATH_BUF_SIZE] = {0};
+    wsprintf(buf, L"%d|%d|%d|%s", eventCode, scanCount, totalCount, directory.c_str());
+
 	WaitForSingleObject(m_Mutex,INFINITE);	
 	std::vector<HANDLE>::iterator iter;
 	for (iter=m_Pipes.begin(); iter!=m_Pipes.end(); iter++) {
 		if (*iter != INVALID_HANDLE_VALUE) {
-			DWORD write = (lstrlen(directory.c_str())+1) * sizeof(TCHAR);
+			DWORD write = (lstrlen(buf)+1) * sizeof(TCHAR);
 			DWORD written;
 			BOOL success = WriteFile(
 				*iter,
-				directory.c_str(),
+				buf,
 				write,
 				&written,
 				NULL);
-			if (directory == L"scan_end") {
+			if (eventCode == SCAN_FINISH) {
 				DisconnectNamedPipe(*iter);
 				CloseHandle(*iter);
 			}
 		}
 	}
-	if (directory == L"scan_end") {
+	if (eventCode == SCAN_FINISH) {
 		m_Pipes.clear();
 	}
 	ReleaseMutex(m_Mutex);
@@ -151,12 +160,19 @@ void ScanTargetCallback(INT event, INT scan, std::wstring directory) {
 
 DWORD WINAPI ThreadExecute(LPVOID lpParam)
 {
-	std::vector<std::wstring> picDirs;
-	m_Scanner->SetScanTargetCallback(ScanTargetCallback);
-	m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, picDirs, TRUE);
-	m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, picDirs, FALSE);
-
-	ScanTargetCallback(0,0,L"scan_end");
+    if (m_Scanner->m_Done) {
+        std::vector<std::wstring>::iterator iter;
+        for (iter = m_Scanner->m_ImgDirectorys.begin(); iter != m_Scanner->m_ImgDirectorys.end(); iter++) {
+            ScanTargetCallback(SCAN_FOUND, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
+        }
+    } else {
+        m_Scanner->SetScanTargetCallback(ScanTargetCallback);
+        m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, m_Scanner->m_ImgDirectorys, TRUE);
+        m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, m_Scanner->m_ImgDirectorys, FALSE);
+        m_Scanner->m_Done = TRUE;
+    }
+	ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
 	m_ImgScanning = FALSE;
+    CloseHandle(m_Thread);
 	return 0;
 }

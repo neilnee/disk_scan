@@ -13,7 +13,7 @@
 #define SCAN_FOUND 2
 #define SCAN_FINISH 3
 
-static const DWORD BUF_SIZE  = 512;
+static const DWORD PATH_BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {
     L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
 
@@ -21,11 +21,12 @@ namespace xl_ds_api
 {
 	/**
 	 * 扫描过程中的回调函数
-	 * @param event : 回调事件类型 SCAN_START-开始扫描目录; SCAN_FOUND-找到目标目录
-	 * @param scan : 已经扫描的目录数
+	 * @param eventCode : 回调事件类型 SCAN_START-开始扫描目录; SCAN_FOUND-找到目标目录 SCAN_FINISH-扫描完成
+	 * @param scanCount : 已经扫描的目录数
+     * @param totalCount : 需要扫描的目录总数
 	 * @param directory : 回调事件对应的目录
 	 */
-    typedef void (*ScanTargetCallback) (INT event, INT scan, std::wstring directory);
+    typedef void (*ScanTargetCallback) (INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
 
     class CScanner
     {
@@ -37,6 +38,8 @@ namespace xl_ds_api
 		 * 添加回调接口
 		 */
 		void SetScanTargetCallback(ScanTargetCallback callback);
+
+        void ClearResult();
 
 		/**
 		 * 根据规则扫描出主要的目标类型存储目录
@@ -70,9 +73,12 @@ namespace xl_ds_api
     public :
         std::vector<std::wstring> m_BaseDirs;
         std::vector<std::wstring> m_PriorityDirs;
+        std::vector<std::wstring> m_ImgDirectorys;
+        INT m_ScanDirs;
+        INT m_TotalDirs;
+        BOOL m_Done;
 
     private :
-		INT m_ScanDirs;
 		ScanTargetCallback m_ScanTargetCallback;
 		std::vector<std::wstring> m_IgnoreDirs;
     };

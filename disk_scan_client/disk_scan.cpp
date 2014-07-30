@@ -5,6 +5,8 @@
 
 #define BUFF_SIZE 1024
 #define TIMEOUT 5000
+#define SCAN_REQUEST_IMG L"scan_img"
+#define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
 
 using namespace xl_ds_api;
 
@@ -99,7 +101,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         return -1;
     }
 
-    LPTSTR message = TEXT("scan_img");
+    LPTSTR message = SCAN_REQUEST_IMG_AFREAH;
     DWORD dWrite;
     DWORD dWritten;
     OVERLAPPED overl;

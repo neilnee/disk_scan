@@ -18,7 +18,9 @@ CScanner::~CScanner()
 
 void CScanner::Init()
 {
+    m_TotalDirs = 0;
 	m_ScanDirs = 0;
+    m_Done = FALSE;
 	m_BaseDirs.clear();
 	m_PriorityDirs.clear();
 	m_IgnoreDirs.clear();
@@ -33,6 +35,7 @@ void CScanner::Init()
 		SHGetFolderPath(NULL, prioritys[i], NULL, 0, szPath);
 		std::wstring directory = szPath;
 		PushBackDir(m_PriorityDirs, directory);
+        m_TotalDirs++;
 	}
 	size  = sizeof(ignores)/sizeof(ignores[0]);
 	for (INT i=0; i<size; i++) {
@@ -44,7 +47,9 @@ void CScanner::Init()
 
 void CScanner::UnInit()
 {
+    m_Done = FALSE;
 	m_ScanDirs = 0;
+    m_TotalDirs = 0;
 	m_PriorityDirs.clear();
 	m_IgnoreDirs.clear();
 	m_BaseDirs.clear();
@@ -63,9 +68,9 @@ void CScanner::PushBackDir(std::vector<std::wstring> &dirList, std::wstring &dir
 
 void CScanner::InitBaseDir()
 {
-    TCHAR szTemp[BUF_SIZE];
+    TCHAR szTemp[PATH_BUF_SIZE];
     szTemp[0] = '\0';
-    DWORD ret = GetLogicalDriveStrings(BUF_SIZE -1, szTemp);
+    DWORD ret = GetLogicalDriveStrings(PATH_BUF_SIZE -1, szTemp);
     if (ret) {
         TCHAR szDrive[4] = TEXT(" :\\");
         TCHAR* p = szTemp;
@@ -99,6 +104,7 @@ void CScanner::InitBaseDir()
 								PushBackDir(m_IgnoreDirs, directory);
 						}
 						PushBackDir(m_BaseDirs, directory);
+                        m_TotalDirs++;
                     }
                     finish = !FindNextFile(handle, &fileData);
                 } while (!finish);
@@ -109,8 +115,17 @@ void CScanner::InitBaseDir()
     }
 }
 
-void CScanner::SetScanTargetCallback(ScanTargetCallback callback) {
+void CScanner::SetScanTargetCallback(ScanTargetCallback callback)
+{
 	m_ScanTargetCallback = callback;
+}
+
+void CScanner::ClearResult()
+{
+    m_ScanDirs = 0;
+    m_TotalDirs = 0;
+    m_Done = FALSE;
+    m_ImgDirectorys.clear();
 }
 
 void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
@@ -132,15 +147,17 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
         }
 		// 跳过忽略文件夹
 		if (std::find(m_IgnoreDirs.begin(), m_IgnoreDirs.end(), directory) != m_IgnoreDirs.end()) {
+            m_ScanDirs++;
 			continue;
 		}
 		// 如果是非优先扫描，则跳过优先扫描文件夹
 		if (!priority && std::find(m_PriorityDirs.begin(), m_PriorityDirs.end(), directory) != m_PriorityDirs.end()) {
+            m_ScanDirs++;
 			continue;
 		}
 		//开始扫描directory目录，并回调进度
 		if (m_ScanTargetCallback != NULL) {
-			m_ScanTargetCallback(SCAN_START, m_ScanDirs, directory);
+			m_ScanTargetCallback(SCAN_START, m_ScanDirs, m_TotalDirs, directory);
 		}
 		SetCurrentDirectory(directory.c_str());
 		handle = FindFirstFile(L"*", &fileData);
@@ -155,6 +172,7 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
                     if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                         // 将目录列入下次递归扫描的列表
                         searchDir.push_back(directory+strFileName);
+                        m_TotalDirs++;
                     } else {
                         // 对文件进行分析操作，以判定该目录是否是要找的目标目录
                         std::wstring::size_type suffixPos = strFileName.rfind(L".");
@@ -175,9 +193,10 @@ void CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
             if(targetCount > 5 && ((targetCount * 10) / (targetCount + otherCount)) > 9) {
                 PushBackDir(targetDir, directory);
 				if (m_ScanTargetCallback != NULL) {
-					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, directory);
+					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, m_TotalDirs, directory);
 				}
             }
+            FindClose(handle);
 		}
         m_ScanDirs++;
 	}
