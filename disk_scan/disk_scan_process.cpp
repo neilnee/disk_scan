@@ -5,6 +5,7 @@
 #define TIMEOUT 12000
 #define SCAN_REQUEST_IMG L"scan_img"
 #define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
+#define SCAN_REQUEST_EXIT L"scan_exit"
 
 BOOL m_ImgScanning = FALSE;
 HANDLE m_Thread = INVALID_HANDLE_VALUE;
@@ -14,7 +15,7 @@ std::vector<HANDLE> m_Pipes;
 
 VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
-BOOL HandleReuqest(std::wstring request);
+BOOL HandleReuqest(std::wstring request, HANDLE pipe);
 
 int APIENTRY _tWinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -97,18 +98,9 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 				}
 				request = operate;
 			}
-           if (success) {
-               if (HandleReuqest(request)) {
-                   WaitForSingleObject(m_Mutex,INFINITE);
-                   m_Pipes.push_back(pipe);
-                   ReleaseMutex(m_Mutex);
-               } else {
-                   DisconnectNamedPipe(pipe);
-                   CloseHandle(pipe);
-               }
-           } else {
-               DisconnectNamedPipe(pipe);
-               CloseHandle(pipe);
+           if (!success || !HandleReuqest(request, pipe)) {
+			   DisconnectNamedPipe(pipe);
+			   CloseHandle(pipe);
            }
         }
     }
@@ -116,10 +108,15 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     return 0;
 }
 
-BOOL HandleReuqest(std::wstring request)
+BOOL HandleReuqest(std::wstring request, HANDLE pipe)
 {
 	BOOL result = FALSE;
-	if (request == SCAN_REQUEST_IMG || request == SCAN_REQUEST_IMG_AFREAH) {
+	if (pipe != INVALID_HANDLE_VALUE) {
+		WaitForSingleObject(m_Mutex,INFINITE);
+		m_Pipes.push_back(pipe);
+		ReleaseMutex(m_Mutex);
+	}
+	if (request == SCAN_REQUEST_IMG || request == SCAN_REQUEST_IMG_AFREAH) {	
 		if (!m_ImgScanning) {
 			m_ImgScanning = TRUE;
 			if (request == SCAN_REQUEST_IMG_AFREAH) {
@@ -135,6 +132,14 @@ BOOL HandleReuqest(std::wstring request)
 				&tid);
 		}
 		result = TRUE;
+	} else if (request == SCAN_REQUEST_EXIT) {
+		if (m_Thread != INVALID_HANDLE_VALUE) {
+			TerminateThread(m_Thread, 0);
+			CloseHandle(m_Thread);
+		}
+		ScanTargetCallback(SCAN_STOP, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
+		result = TRUE;
+		ExitProcess(0);
 	}
 	return result;
 }
@@ -156,14 +161,14 @@ VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
 				write,
 				&written,
 				NULL);
-			if (eventCode == SCAN_FINISH) {
+			if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
 				FlushFileBuffers(*iter);
 				DisconnectNamedPipe(*iter);
 				CloseHandle(*iter);
 			}
 		}
 	}
-	if (eventCode == SCAN_FINISH) {
+	if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
 		m_Pipes.clear();
 	}
 	ReleaseMutex(m_Mutex);

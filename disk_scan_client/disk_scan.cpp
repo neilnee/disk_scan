@@ -1,12 +1,11 @@
 #include "stdafx.h"
 #include "disk_scan.h"
+#include <windows.h>
 #include <vector>
 #include <ShlObj.h>
 
 #define PIPE_BUF_SIZE 1024
 #define TIMEOUT 12000
-#define SCAN_REQUEST_IMG L"scan_img"
-#define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
 
 using namespace xl_ds_api;
 
@@ -25,15 +24,17 @@ CDiskScan::~CDiskScan()
     m_NotifyThreadIDs.clear();
 }
 
-VOID CDiskScan::ScanImgInProcess(DWORD notifyThreadID)
+VOID CDiskScan::ScanImgInProcess(DWORD threadID, LPTSTR requestCode)
 {
-    DWORD* pNotifyThreadID = new DWORD(notifyThreadID);
-    DWORD threadID;
+	xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
+	request->m_ThreadID = threadID;
+	request->m_RequestCode = requestCode;
+    
     CreateThread(
         NULL,
         0,
         ScanImgProcessExecute,
-        (LPVOID) pNotifyThreadID,
+        (LPVOID) request,
         0,
         &threadID);
 }
@@ -42,15 +43,15 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
 {
     BOOL success = FALSE;
 	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
-	DWORD* threadIDPtr = (DWORD*) lpParam;
-	if (threadIDPtr == NULL) {
+	xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
+	if (requestPtr == NULL) {
 		return -1;
 	}
-	DWORD threadID = *threadIDPtr;
-	delete threadIDPtr;
+	xl_ds_api::CScanRequest request = *requestPtr;
+	delete requestPtr;
 
     WaitForSingleObject(m_IPSMutex, INFINITE);
-    m_NotifyThreadIDs.push_back(threadID);
+    m_NotifyThreadIDs.push_back(request.m_ThreadID);
     if(m_ImgProcessScanning) {
 		success = TRUE;
     } else {
@@ -100,7 +101,6 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         return -1;
     }
 
-    LPTSTR message = SCAN_REQUEST_IMG_AFREAH;
     DWORD dWrite;
     DWORD dWritten;
     OVERLAPPED overl;
@@ -108,11 +108,11 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
     overl.hEvent = even;
     overl.Offset = 0;
     overl.OffsetHigh = 0;
-    dWrite = (lstrlen(message)+1) * sizeof(TCHAR);
+    dWrite = (lstrlen(request.m_RequestCode)+1) * sizeof(TCHAR);
     do {
         success = WriteFile(
             pipe,
-            message,
+            request.m_RequestCode,
             dWrite,
             &dWritten,
             &overl);
@@ -163,7 +163,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         }
         ReleaseMutex(m_IPSMutex);
 
-        if (eventCode == SCAN_FINISH) {
+        if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
             WaitForSingleObject(m_IPSMutex, INFINITE);
             m_NotifyThreadIDs.clear();
             ReleaseMutex(m_IPSMutex);

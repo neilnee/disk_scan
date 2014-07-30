@@ -13,6 +13,7 @@
 #define SCAN_FOUND 2
 #define SCAN_RESULT 3
 #define SCAN_FINISH 4
+#define SCAN_STOP 5
 
 static const DWORD PATH_BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {
