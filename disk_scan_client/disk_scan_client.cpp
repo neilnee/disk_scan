@@ -19,7 +19,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	m_MainThreadID = GetCurrentThreadId();
 
     xl_ds_api::CDiskScan* diskScan = new xl_ds_api::CDiskScan();
-    diskScan->ScanImgInProcess(m_MainThreadID, SCAN_REQUEST_IMG_AFREAH);
+    diskScan->ScanImgInProcess(m_MainThreadID, SCAN_REQUEST_EXIT);
 
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
         if (ret == -1) {
@@ -33,8 +33,9 @@ int _tmain(int argc, _TCHAR* argv[])
 					}
 					xl_ds_api::CScanInfo info = *infoPtr;
 					delete infoPtr;
-
-					_tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
+                    if (info.m_EventCode == SCAN_STOP) {
+                        _tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
+                    }
 				}
             } else {
                 TranslateMessage(&msg); 

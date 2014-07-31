@@ -42,6 +42,7 @@ VOID CScanner::Init()
 
 VOID CScanner::UnInit()
 {
+    m_Exit = FALSE;
     m_Done = FALSE;
 	m_ScanDirs = 0;
     m_TotalDirs = 0;
@@ -131,10 +132,9 @@ VOID CScanner::ClearResult()
 
 VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
 {
-	if (baseDir == NULL || baseDir->size() <= 0) {
+	if (m_Exit || baseDir == NULL || baseDir->size() <= 0) {
 		return;
 	}
-
 	std::vector<std::wstring>::iterator iter;
 	std::vector<std::wstring> searchDir;
 	for (iter = baseDir->begin(); iter != baseDir->end(); iter++) {

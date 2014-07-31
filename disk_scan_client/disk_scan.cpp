@@ -79,13 +79,12 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
             break;
         }
         if (GetLastError() == ERROR_FILE_NOT_FOUND) {
+            // 没有扫描进程启动，启动扫描进程
             TCHAR path[MAX_PATH];
             GetCurrentDirectory(MAX_PATH, path);
-            ShellExecute(NULL, L"open", L"..\\Debug\\disk_scan_process.exe", NULL, path, 0);
-            // 没有扫描进程启动，启动扫描进程
+            ShellExecute(NULL, NULL, L"..\\Debug\\disk_scan_process.exe", NULL, path, 0);
             continue;
-        }
-        if (GetLastError() != ERROR_PIPE_BUSY) {
+        } else if (GetLastError() != ERROR_PIPE_BUSY) {
             return -1;
         }
         if (!WaitNamedPipe(pipeName, TIMEOUT)) {

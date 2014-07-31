@@ -1,4 +1,5 @@
 #include "stdafx.h"
+#include <psapi.h>
 #include "disk_scanner.h"
 
 #define PIPE_BUF_SIZE 1024
@@ -8,6 +9,8 @@
 #define SCAN_REQUEST_EXIT L"scan_exit"
 
 BOOL m_ImgScanning = FALSE;
+BOOL m_Exit = FALSE;
+BOOL m_StopCallback = FALSE;
 HANDLE m_Thread = INVALID_HANDLE_VALUE;
 HANDLE m_Mutex = CreateMutex(NULL,FALSE,NULL);
 xl_ds_api::CScanner* m_Scanner = NULL;
@@ -15,13 +18,17 @@ std::vector<HANDLE> m_Pipes;
 
 VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
-BOOL HandleReuqest(std::wstring request, HANDLE pipe);
+INT HandleReuqest(std::wstring request, HANDLE pipe);
 
 int APIENTRY _tWinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
                      LPTSTR    lpCmdLine,
                      int       nCmdShow)
 {
+    HANDLE processMutex = CreateMutex(NULL, FALSE, L"disk_scan_process_{71066095-4ACE-49bb-84F0-2DAADDCEAC3C}");
+    if (GetLastError() == ERROR_ALREADY_EXISTS) {
+        return 0;
+    }
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
@@ -92,31 +99,43 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					if (waitResult == WAIT_TIMEOUT) {
 						// 等待客户端命令超时
 						// 判定当前是否有工作线程运行，如果没有工作线程运行，则超时退出，否则继续等待
-						continue;
+                        if (m_ImgScanning) {
+                            continue;
+                        } else {
+                            goto ExitFree;
+                        }
 					}
 					success = GetOverlappedResult(pipe, &readOverl, &transByts, FALSE);
 				}
 				request = operate;
 			}
-           if (!success || !HandleReuqest(request, pipe)) {
-			   DisconnectNamedPipe(pipe);
-			   CloseHandle(pipe);
-           }
+            if (HandleReuqest(request, pipe) == -2) {
+                goto ExitFree;
+            }
         }
     }
+ExitFree:
+    m_StopCallback = TRUE;
+    m_Exit = TRUE;
+    m_Scanner->m_Exit = TRUE;
+    if (m_Thread != INVALID_HANDLE_VALUE) {
+        WaitForSingleObject(m_Thread, TIMEOUT);
+    }
     delete m_Scanner;
+    CloseHandle(m_Mutex);
+    CloseHandle(processMutex);
     return 0;
 }
 
-BOOL HandleReuqest(std::wstring request, HANDLE pipe)
+INT HandleReuqest(std::wstring request, HANDLE pipe)
 {
-	BOOL result = FALSE;
+	INT result = -1;
 	if (pipe != INVALID_HANDLE_VALUE) {
 		WaitForSingleObject(m_Mutex,INFINITE);
 		m_Pipes.push_back(pipe);
 		ReleaseMutex(m_Mutex);
 	}
-	if (request == SCAN_REQUEST_IMG || request == SCAN_REQUEST_IMG_AFREAH) {	
+	if (request == SCAN_REQUEST_IMG || request == SCAN_REQUEST_IMG_AFREAH) {
 		if (!m_ImgScanning) {
 			m_ImgScanning = TRUE;
 			if (request == SCAN_REQUEST_IMG_AFREAH) {
@@ -131,21 +150,26 @@ BOOL HandleReuqest(std::wstring request, HANDLE pipe)
 				0,
 				&tid);
 		}
-		result = TRUE;
+		result = 0;
 	} else if (request == SCAN_REQUEST_EXIT) {
-		if (m_Thread != INVALID_HANDLE_VALUE) {
-			TerminateThread(m_Thread, 0);
-			CloseHandle(m_Thread);
-		}
 		ScanTargetCallback(SCAN_STOP, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
-		result = TRUE;
-		ExitProcess(0);
-	}
+        result = -2;
+    } else {
+        DisconnectNamedPipe(pipe);
+        CloseHandle(pipe);
+        result = -1;
+    }
 	return result;
 }
 
-VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory) 
+VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory)
 {
+    if (m_StopCallback) {
+        return;
+    }
+    if (eventCode == SCAN_STOP) {
+        m_StopCallback = TRUE;
+    }
     wchar_t buf[PATH_BUF_SIZE] = {0};
     wsprintf(buf, L"%d|%d|%d|%s", eventCode, scanCount, totalCount, directory.c_str());
 
@@ -176,18 +200,23 @@ VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
 
 DWORD WINAPI ThreadExecute(LPVOID lpParam)
 {
+    if (m_Exit) {
+        return 0;
+    }
     if (!m_Scanner->m_Done) {
         m_Scanner->SetScanTargetCallback(ScanTargetCallback);
         m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, m_Scanner->m_ImgDirectorys, TRUE);
         m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, m_Scanner->m_ImgDirectorys, FALSE);
         m_Scanner->m_Done = TRUE;
     }
-    std::vector<std::wstring>::iterator iter;
-    for (iter = m_Scanner->m_ImgDirectorys.begin(); iter != m_Scanner->m_ImgDirectorys.end(); iter++) {
-        ScanTargetCallback(SCAN_RESULT, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
+    if (!m_Exit) {
+        std::vector<std::wstring>::iterator iter;
+        for (iter = m_Scanner->m_ImgDirectorys.begin(); iter != m_Scanner->m_ImgDirectorys.end(); iter++) {
+            ScanTargetCallback(SCAN_RESULT, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
+        }
+        ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
+        m_ImgScanning = FALSE;
+        CloseHandle(m_Thread);
     }
-	ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
-	m_ImgScanning = FALSE;
-    CloseHandle(m_Thread);
 	return 0;
 }

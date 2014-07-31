@@ -68,6 +68,7 @@ namespace xl_ds_api
         INT m_ScanDirs;
         INT m_TotalDirs;
         BOOL m_Done;
+        BOOL m_Exit;
     private :
 		ScanTargetCallback m_ScanTargetCallback;
 		std::vector<std::wstring> m_IgnoreDirs;
