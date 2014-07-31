@@ -82,7 +82,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
             // 没有扫描进程启动，启动扫描进程
             TCHAR path[MAX_PATH];
             GetCurrentDirectory(MAX_PATH, path);
-            ShellExecute(NULL, NULL, L"..\\Debug\\disk_scan_process.exe", NULL, path, 0);
+            ShellExecute(NULL, NULL, L"..\\Debug\\disk_scan_process.exe", L"scan_img", path, 0);
             continue;
         } else if (GetLastError() != ERROR_PIPE_BUSY) {
             if (pipe != INVALID_HANDLE_VALUE) {

@@ -32,6 +32,9 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
+	if(!HandleReuqest(lpCmdLine, INVALID_HANDLE_VALUE)) {
+		goto ExitFree;
+	}
 	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
     for(;;) {
 		HANDLE pipe = CreateNamedPipe(
@@ -163,8 +166,10 @@ BOOL HandleReuqest(std::wstring request, HANDLE pipe)
 		ScanTargetCallback(SCAN_STOP, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
         result = FALSE;
     } else {
-        DisconnectNamedPipe(pipe);
-        CloseHandle(pipe);
+		if (pipe != INVALID_HANDLE_VALUE) {
+			DisconnectNamedPipe(pipe);
+			CloseHandle(pipe);
+		}
         result = TRUE;
     }
 	return result;
