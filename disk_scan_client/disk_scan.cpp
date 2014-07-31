@@ -85,6 +85,10 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
             ShellExecute(NULL, NULL, L"..\\Debug\\disk_scan_process.exe", NULL, path, 0);
             continue;
         } else if (GetLastError() != ERROR_PIPE_BUSY) {
+            if (pipe != INVALID_HANDLE_VALUE) {
+                CloseHandle(pipe);
+            }
+            CloseHandle(m_IPSMutex);
             return -1;
         }
         if (!WaitNamedPipe(pipeName, TIMEOUT)) {
@@ -122,6 +126,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         DWORD transBytes;
         success = GetOverlappedResult(pipe, &overl, &transBytes, FALSE);
     } while (!success);
+    CloseHandle(even);
 
     TCHAR buf[PIPE_BUF_SIZE];
     DWORD dRead;
@@ -173,6 +178,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         }
     } while (success);
 
+    CloseHandle(m_IPSMutex);
     CloseHandle(pipe);
     return 0;
 }

@@ -64,23 +64,23 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			// 如果没有客户端连接，进入超时等待
 			DWORD waitRet = WaitForSingleObject(connEvent, TIMEOUT);
 			if (waitRet == WAIT_TIMEOUT) {
+                // 等待客户端连接超时
+                // 判断当前是否有客户进程存在，如果没有则退出程序，否则继续等待
 				DisconnectNamedPipe(pipe);
 				CloseHandle(pipe);
-				// 等待客户端连接超时
-				// 判断当前是否有客户进程存在，如果没有则退出程序，否则继续等待
 				continue;
 			}
 			DWORD transBytes;
 			connected = GetOverlappedResult(pipe, &connOverl, &transBytes, FALSE);
 		}
+        CloseHandle(connEvent);
         if (connected) {
             BOOL success = FALSE;
 			std::wstring request;
 			while(!success) {
 				OVERLAPPED readOverl;
 				HANDLE readEvent;
-				HANDLE heap = GetProcessHeap();
-				TCHAR* operate = (TCHAR*)HeapAlloc(heap, 0, PATH_BUF_SIZE*sizeof(TCHAR));
+				TCHAR operate[PATH_BUF_SIZE];
 				DWORD readBytes = 0;
 				readEvent = CreateEvent(NULL, TRUE, TRUE, NULL);
 				readOverl.hEvent = readEvent;
@@ -102,12 +102,15 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
                         if (m_ImgScanning) {
                             continue;
                         } else {
+                            DisconnectNamedPipe(pipe);
+                            CloseHandle(pipe);
                             goto ExitFree;
                         }
 					}
 					success = GetOverlappedResult(pipe, &readOverl, &transByts, FALSE);
-				}
-				request = operate;
+                }
+                CloseHandle(readEvent);
+                request = operate;
 			}
             if (HandleReuqest(request, pipe) == -2) {
                 goto ExitFree;
@@ -120,6 +123,7 @@ ExitFree:
     m_Scanner->m_Exit = TRUE;
     if (m_Thread != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(m_Thread, TIMEOUT);
+        CloseHandle(m_Thread);
     }
     delete m_Scanner;
     CloseHandle(m_Mutex);
