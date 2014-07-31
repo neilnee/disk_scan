@@ -18,7 +18,7 @@ std::vector<HANDLE> m_Pipes;
 
 VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstring directory);
 DWORD WINAPI ThreadExecute(LPVOID lpParam);
-INT HandleReuqest(std::wstring request, HANDLE pipe);
+BOOL HandleReuqest(std::wstring request, HANDLE pipe);
 
 int APIENTRY _tWinMain(HINSTANCE hInstance,
                      HINSTANCE hPrevInstance,
@@ -65,10 +65,14 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			DWORD waitRet = WaitForSingleObject(connEvent, TIMEOUT);
 			if (waitRet == WAIT_TIMEOUT) {
                 // 等待客户端连接超时
-                // 判断当前是否有客户进程存在，如果没有则退出程序，否则继续等待
+                // 判断是否在扫描操作中，如果没有则退出程序，否则继续等待
 				DisconnectNamedPipe(pipe);
 				CloseHandle(pipe);
-				continue;
+				if (m_ImgScanning) {
+					continue;
+				} else {
+					goto ExitFree;
+				}
 			}
 			DWORD transBytes;
 			connected = GetOverlappedResult(pipe, &connOverl, &transBytes, FALSE);
@@ -112,7 +116,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
                 CloseHandle(readEvent);
                 request = operate;
 			}
-            if (HandleReuqest(request, pipe) == -2) {
+            if (!HandleReuqest(request, pipe)) {
                 goto ExitFree;
             }
         }
@@ -131,9 +135,9 @@ ExitFree:
     return 0;
 }
 
-INT HandleReuqest(std::wstring request, HANDLE pipe)
+BOOL HandleReuqest(std::wstring request, HANDLE pipe)
 {
-	INT result = -1;
+	BOOL result = TRUE;
 	if (pipe != INVALID_HANDLE_VALUE) {
 		WaitForSingleObject(m_Mutex,INFINITE);
 		m_Pipes.push_back(pipe);
@@ -154,14 +158,14 @@ INT HandleReuqest(std::wstring request, HANDLE pipe)
 				0,
 				&tid);
 		}
-		result = 0;
+		result = TRUE;
 	} else if (request == SCAN_REQUEST_EXIT) {
 		ScanTargetCallback(SCAN_STOP, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
-        result = -2;
+        result = FALSE;
     } else {
         DisconnectNamedPipe(pipe);
         CloseHandle(pipe);
-        result = -1;
+        result = TRUE;
     }
 	return result;
 }
