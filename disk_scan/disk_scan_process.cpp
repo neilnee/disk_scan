@@ -32,6 +32,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
+    //m_Scanner->SaveImgScanResult(&m_Scanner->m_ImgDirectorys);
+    if (!HandleReuqest(lpCmdLine, INVALID_HANDLE_VALUE)) {
+        goto ExitFree;
+    }
 	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
     for(;;) {
 		HANDLE pipe = CreateNamedPipe(
@@ -178,7 +182,7 @@ VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
     if (eventCode == SCAN_STOP) {
         m_StopCallback = TRUE;
     }
-    wchar_t buf[PATH_BUF_SIZE] = {0};
+    TCHAR buf[PATH_BUF_SIZE] = {0};
     wsprintf(buf, L"%d|%d|%d|%s", eventCode, scanCount, totalCount, directory.c_str());
 
 	WaitForSingleObject(m_Mutex,INFINITE);	
@@ -211,10 +215,15 @@ DWORD WINAPI ThreadExecute(LPVOID lpParam)
     if (m_Exit) {
         return 0;
     }
+    // 如果没有扫描到结果，则去获取扫描结果
     if (!m_Scanner->m_Done) {
-        m_Scanner->SetScanTargetCallback(ScanTargetCallback);
-        m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, m_Scanner->m_ImgDirectorys, TRUE);
-        m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, m_Scanner->m_ImgDirectorys, FALSE);
+        // 如果没有有效的持久化存储的扫描结果，则进行磁盘扫描
+        if (!m_Scanner->LoadImgScanResult(m_Scanner->m_ImgDirectorys)) {
+            m_Scanner->SetScanTargetCallback(ScanTargetCallback);
+            m_Scanner->ScanTargetDir(&m_Scanner->m_PriorityDirs, m_Scanner->m_ImgDirectorys, TRUE);
+            m_Scanner->ScanTargetDir(&m_Scanner->m_BaseDirs, m_Scanner->m_ImgDirectorys, FALSE);
+            m_Scanner->SaveImgScanResult(&m_Scanner->m_ImgDirectorys);
+        }
         m_Scanner->m_Done = TRUE;
     }
     if (!m_Exit) {

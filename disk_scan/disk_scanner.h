@@ -50,6 +50,10 @@ namespace xl_ds_api
 		 * @param priority : in, 是否是扫描优先目录
 		 */
 		VOID ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority);
+
+        VOID SaveImgScanResult(std::vector<std::wstring>* imgDirectorys);
+
+        BOOL LoadImgScanResult(std::vector<std::wstring> &imgDirectorys);
 	private :
 		VOID Init();
 		VOID UnInit();
