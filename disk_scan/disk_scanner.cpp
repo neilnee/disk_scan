@@ -205,3 +205,28 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
         ScanTargetDir(&searchDir, targetDir, priority);
     }
 }
+
+VOID CScanner::SaveImgScanResult(std::vector<std::wstring>* imgDirectorys)
+{
+    /*DWORD written;
+    std::wstring str = L"D:\\sss\\sss";
+    TCHAR path[MAX_PATH];
+    GetModuleFileName(NULL, path, MAX_PATH);
+    std::wstring filePath = path;
+    filePath = filePath.substr(0, filePath.rfind(L"\\"));
+    filePath.append(L"\\.config");
+    HANDLE file = CreateFile(
+        filePath.c_str(),
+        GENERIC_WRITE,
+        0,
+        NULL,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL);
+    WriteFile(file, str.c_str(), str.length(), &written, NULL);*/
+}
+
+BOOL CScanner::LoadImgScanResult(std::vector<std::wstring> &imgDirectorys)
+{
+    return FALSE;
+}
