@@ -32,8 +32,6 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
-//ÁÙÊ±Ôö¼Ó²âÊÔ
-//    m_Scanner->SaveImgScanResult(&m_Scanner->m_ImgDirectorys);
     if (!HandleReuqest(lpCmdLine, INVALID_HANDLE_VALUE)) {
         goto ExitFree;
     }
@@ -83,6 +81,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 			connected = GetOverlappedResult(pipe, &connOverl, &transBytes, FALSE);
 		}
         CloseHandle(connEvent);
+		connEvent = INVALID_HANDLE_VALUE;
         if (connected) {
             BOOL success = FALSE;
 			std::wstring request;
@@ -119,6 +118,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 					success = GetOverlappedResult(pipe, &readOverl, &transByts, FALSE);
                 }
                 CloseHandle(readEvent);
+				readEvent = INVALID_HANDLE_VALUE;
                 request = operate;
 			}
             if (!HandleReuqest(request, pipe)) {
@@ -134,11 +134,14 @@ ExitFree:
 	}
     if (m_Thread != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(m_Thread, TIMEOUT);
-        CloseHandle(m_Thread);
+		CloseHandle(m_Thread);
+		m_Thread = INVALID_HANDLE_VALUE;
     }
     delete m_Scanner;
     CloseHandle(m_Mutex);
+	m_Mutex = INVALID_HANDLE_VALUE;
     CloseHandle(processMutex);
+	processMutex = INVALID_HANDLE_VALUE;
     return 0;
 }
 
@@ -239,6 +242,7 @@ DWORD WINAPI ThreadExecute(LPVOID lpParam)
         ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
         m_ImgScanning = FALSE;
         CloseHandle(m_Thread);
+		m_Thread = INVALID_HANDLE_VALUE;
     }
 	return 0;
 }

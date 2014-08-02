@@ -129,6 +129,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         success = GetOverlappedResult(pipe, &overl, &transBytes, FALSE);
     } while (!success);
     CloseHandle(even);
+	even = INVALID_HANDLE_VALUE;
 
     TCHAR buf[PIPE_BUF_SIZE];
     DWORD dRead;
@@ -181,6 +182,8 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
     } while (success);
 
     CloseHandle(m_IPSMutex);
+	m_IPSMutex = INVALID_HANDLE_VALUE;
     CloseHandle(pipe);
+	pipe = INVALID_HANDLE_VALUE;
     return 0;
 }

@@ -2,6 +2,7 @@
 #include "disk_scanner.h"
 
 #include <algorithm>
+#include <time.h>
 
 using namespace xl_ds_api;
 
@@ -139,7 +140,7 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 	std::vector<std::wstring> searchDir;
 	for (iter = baseDir->begin(); iter != baseDir->end(); iter++) {
 		WIN32_FIND_DATA fileData;
-		HANDLE handle = NULL;
+		HANDLE handle = INVALID_HANDLE_VALUE;
 		std::wstring directory = *iter;
         
         // 需要补上最后的斜杠
@@ -208,22 +209,39 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 
 VOID CScanner::SaveImgScanResult(std::vector<std::wstring>* imgDirectorys)
 {
-    /*DWORD written;
-    std::wstring str = L"D:\\sss\\sss";
-    TCHAR path[MAX_PATH];
-    GetModuleFileName(NULL, path, MAX_PATH);
-    std::wstring filePath = path;
-    filePath = filePath.substr(0, filePath.rfind(L"\\"));
-    filePath.append(L"\\.config");
-    HANDLE file = CreateFile(
-        filePath.c_str(),
-        GENERIC_WRITE,
-        0,
-        NULL,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL);
-    WriteFile(file, str.c_str(), str.length(), &written, NULL);*/
+	if (imgDirectorys == NULL) {
+		return;
+	}
+	time_t curTime = time(NULL);
+
+	TCHAR fileName[MAX_PATH];
+	GetModuleFileName(NULL, fileName, MAX_PATH);
+	std::wstring filePath = fileName;
+	filePath = filePath.substr(0, filePath.rfind(L"\\"));
+	filePath.append(L"\\.scan_result");
+
+	HANDLE file = CreateFile(
+		filePath.c_str(),
+		GENERIC_WRITE,
+		0,
+		NULL,
+		CREATE_ALWAYS,
+		FILE_ATTRIBUTE_HIDDEN,
+		NULL);
+
+	DWORD written;
+	TCHAR time[20] = {0};
+	wsprintf(time, L"%d\n", curTime);
+	WriteFile(file, time, sizeof(TCHAR) * lstrlen(time), &written, NULL);
+
+	std::vector<std::wstring>::iterator iter;
+	for (iter = imgDirectorys->begin(); iter != imgDirectorys->end(); iter++) {
+		TCHAR path[MAX_PATH] = {0};
+		wsprintf(path, L"%s\n", (*iter).c_str());
+		WriteFile(file, path, sizeof(TCHAR) * lstrlen(path), &written, NULL);
+	}
+	CloseHandle(file);
+	file = INVALID_HANDLE_VALUE;
 }
 
 BOOL CScanner::LoadImgScanResult(std::vector<std::wstring> &imgDirectorys)
