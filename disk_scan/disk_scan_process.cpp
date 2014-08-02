@@ -27,7 +27,7 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 {
     HANDLE processMutex = CreateMutex(NULL, FALSE, L"disk_scan_process_{71066095-4ACE-49bb-84F0-2DAADDCEAC3C}");
     if (GetLastError() == ERROR_ALREADY_EXISTS) {
-        return 0;
+        goto ExitFree;
     }
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
@@ -128,7 +128,9 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 ExitFree:
     m_StopCallback = TRUE;
     m_Exit = TRUE;
-    m_Scanner->m_Exit = TRUE;
+	if (m_Scanner != NULL) {
+		m_Scanner->m_Exit = TRUE;
+	}
     if (m_Thread != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(m_Thread, TIMEOUT);
         CloseHandle(m_Thread);
