@@ -80,9 +80,11 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         }
         if (GetLastError() == ERROR_FILE_NOT_FOUND) {
             // 没有扫描进程启动，启动扫描进程
-            TCHAR path[MAX_PATH];
-            GetCurrentDirectory(MAX_PATH, path);
-            ShellExecute(NULL, NULL, L"..\\Debug\\disk_scan_process.exe", L"scan_img", path, 0);
+			TCHAR path[MAX_PATH];
+			GetModuleFileName(NULL, path, MAX_PATH);
+			std::wstring parentPath = path;
+			parentPath = parentPath.substr(0, parentPath.rfind(L"\\"));
+			ShellExecute(NULL, NULL, L"disk_scan_process.exe", L"scan_img", parentPath.c_str(), 0);
             continue;
         } else if (GetLastError() != ERROR_PIPE_BUSY) {
             if (pipe != INVALID_HANDLE_VALUE) {

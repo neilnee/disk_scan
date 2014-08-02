@@ -32,7 +32,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
     if (m_Scanner == NULL) {
         m_Scanner = new xl_ds_api::CScanner();
     }
-    //m_Scanner->SaveImgScanResult(&m_Scanner->m_ImgDirectorys);
+//ÁÙÊ±Ôö¼Ó²âÊÔ
+//    m_Scanner->SaveImgScanResult(&m_Scanner->m_ImgDirectorys);
     if (!HandleReuqest(lpCmdLine, INVALID_HANDLE_VALUE)) {
         goto ExitFree;
     }
