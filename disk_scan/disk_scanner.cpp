@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <time.h>
 
+// 持久化的扫描结果有效期 2天
+#define RESULT_VALIDITY_PERIOD 172880
+
 using namespace xl_ds_api;
 
 CScanner::CScanner()
@@ -51,6 +54,7 @@ VOID CScanner::UnInit()
 	m_PriorityDirs.clear();
 	m_IgnoreDirs.clear();
 	m_BaseDirs.clear();
+	m_ImgDirectorys.clear();
 	m_ScanTargetCallback = NULL;
 }
 
@@ -129,6 +133,16 @@ VOID CScanner::ClearResult()
     m_TotalDirs = m_FirstDirs;
     m_Done = FALSE;
     m_ImgDirectorys.clear();
+	DeleteFile(GetScanResultFilePath().c_str());
+}
+
+std::wstring CScanner::GetScanResultFilePath() {
+	TCHAR fileName[MAX_PATH];
+	GetModuleFileName(NULL, fileName, MAX_PATH);
+	std::wstring filePath = fileName;
+	filePath = filePath.substr(0, filePath.rfind(L"\\"));
+	filePath.append(L"\\.scan_result");
+	return filePath;
 }
 
 VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
@@ -214,11 +228,7 @@ VOID CScanner::SaveImgScanResult(std::vector<std::wstring>* imgDirectorys)
 	}
 	time_t curTime = time(NULL);
 
-	TCHAR fileName[MAX_PATH];
-	GetModuleFileName(NULL, fileName, MAX_PATH);
-	std::wstring filePath = fileName;
-	filePath = filePath.substr(0, filePath.rfind(L"\\"));
-	filePath.append(L"\\.scan_result");
+	std::wstring filePath = GetScanResultFilePath();
 
 	HANDLE file = CreateFile(
 		filePath.c_str(),
@@ -228,6 +238,9 @@ VOID CScanner::SaveImgScanResult(std::vector<std::wstring>* imgDirectorys)
 		CREATE_ALWAYS,
 		FILE_ATTRIBUTE_HIDDEN,
 		NULL);
+	if (file == INVALID_HANDLE_VALUE) {
+		return;
+	}
 
 	DWORD written;
 	TCHAR time[20] = {0};
@@ -241,10 +254,63 @@ VOID CScanner::SaveImgScanResult(std::vector<std::wstring>* imgDirectorys)
 		WriteFile(file, path, sizeof(TCHAR) * lstrlen(path), &written, NULL);
 	}
 	CloseHandle(file);
-	file = INVALID_HANDLE_VALUE;
 }
 
 BOOL CScanner::LoadImgScanResult(std::vector<std::wstring> &imgDirectorys)
 {
-    return FALSE;
+	BOOL result = FALSE;
+	time_t curTime = time(NULL);
+	std::wstring filePath = GetScanResultFilePath();
+
+	HANDLE file = CreateFile(
+		filePath.c_str(),
+		GENERIC_READ,
+		0,
+		NULL,
+		OPEN_EXISTING,
+		FILE_ATTRIBUTE_HIDDEN,
+		NULL);
+	if (file == INVALID_HANDLE_VALUE) {
+		return result;
+	}
+
+	TCHAR buf = '\0';
+	DWORD bufSize = sizeof(TCHAR);
+	DWORD readSize;
+	std::wstring line;
+	while(ReadFile(file, &buf, bufSize, &readSize, NULL) == TRUE && buf != '\n') {
+		line = line + buf;
+	}
+	time_t saveTime = _ttoi64(line.c_str());
+	if ((curTime - saveTime) < RESULT_VALIDITY_PERIOD) {
+		TCHAR curDirectory[MAX_PATH];
+		DWORD curDirRet = GetCurrentDirectory(MAX_PATH, curDirectory);
+		buf = '\0';
+		line.clear();
+		BOOL finish = FALSE;
+		do {
+			finish = ReadFile(file, &buf, bufSize, &readSize, NULL);
+			if (readSize == 0) {
+				finish = FALSE;
+			}
+			if (finish) {
+				if (buf == '\n') {
+					if(SetCurrentDirectory(line.c_str())) {
+						imgDirectorys.push_back(line);
+					}
+					line.clear();
+				} else {
+					line = line + buf;
+				}
+			}
+		} while(finish);
+		if (curDirRet <= MAX_PATH) {
+			SetCurrentDirectory(curDirectory);
+		}
+	}
+	if (imgDirectorys.size() > 0) {
+		result = TRUE;
+	}
+	CloseHandle(file);
+    return result;
 }

@@ -240,9 +240,9 @@ DWORD WINAPI ThreadExecute(LPVOID lpParam)
             ScanTargetCallback(SCAN_RESULT, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
         }
         ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
-        m_ImgScanning = FALSE;
         CloseHandle(m_Thread);
 		m_Thread = INVALID_HANDLE_VALUE;
+		m_ImgScanning = FALSE;
     }
 	return 0;
 }

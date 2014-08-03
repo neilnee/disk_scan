@@ -65,6 +65,8 @@ namespace xl_ds_api
 		 * 扫描出本地各磁盘的一级目录
 		 */
 		VOID InitBaseDir();
+
+		std::wstring GetScanResultFilePath();
     public :
         std::vector<std::wstring> m_BaseDirs;
         std::vector<std::wstring> m_PriorityDirs;
