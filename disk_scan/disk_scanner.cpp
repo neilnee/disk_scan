@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <time.h>
+#include <Shlwapi.h>
 
 // 持久化的扫描结果有效期 2天
 #define RESULT_VALIDITY_PERIOD 172880
@@ -26,6 +27,58 @@ VOID CScanner::Init()
 	INT ignores[] = IGNORE_DIRS;
 	INT prioritys[] = PRIORITY_DIRS;
 	TCHAR szPath[MAX_PATH];
+    TCHAR curDirectory[MAX_PATH];
+    DWORD curDirRet = GetCurrentDirectory(MAX_PATH, curDirectory);
+
+    SHGetFolderPath(NULL, CSIDL_RECENT, NULL, 0, szPath);
+    if (SetCurrentDirectory(szPath)) {
+        IShellLink* slPtr= NULL;
+        IPersistFile* pfPtr = NULL;
+        CoInitialize(NULL);
+        HRESULT hr = CoCreateInstance(
+            CLSID_ShellLink, 
+            NULL,CLSCTX_INPROC_SERVER,  
+            IID_IShellLink,
+            reinterpret_cast<LPVOID*>(&slPtr));
+        if (!FAILED(hr)) {
+            hr = slPtr->QueryInterface(
+                IID_IPersistFile,
+                reinterpret_cast<LPVOID*>(&pfPtr));
+            if (!FAILED(hr)) {
+                WIN32_FIND_DATA findData;
+                HANDLE handle = FindFirstFile(L"*.lnk", &findData);
+                BOOL finish = FALSE;
+                while (!finish && handle != INVALID_HANDLE_VALUE) {
+                    std::wstring filePath = szPath;
+                    if (filePath.rfind(L"\\") != filePath.length() - 1) {
+                        filePath.append(L"\\");
+                    }
+                    filePath.append(findData.cFileName);
+                    hr = pfPtr->Load(filePath.c_str(), STGM_READ);
+                    if (!FAILED(hr)) {
+                        hr = slPtr->Resolve(NULL, SLR_NO_UI | SLR_NOSEARCH);
+                        if (!FAILED(hr)) {
+                            TCHAR path[MAX_PATH];
+                            slPtr->GetPath(path, MAX_PATH, &findData, NULL);
+                            if(PathIsDirectory(path)) {
+                                std::wstring directory = path;
+                                PushBackDir(m_PriorityDirs, directory);
+                            }
+                        }
+                    }
+                    finish = !FindNextFile(handle, &findData);
+                }
+                FindClose(handle);
+            }
+        }
+        if (slPtr != NULL) {
+            slPtr->Release();
+        }
+        if (pfPtr != NULL) {
+            pfPtr->Release();
+        }
+        CoUninitialize();
+    }
 
 	INT size  = sizeof(prioritys)/sizeof(prioritys[0]);
 	for (INT i=0; i<size; i++) {
@@ -42,6 +95,10 @@ VOID CScanner::Init()
 		PushBackDir(m_IgnoreDirs, directory);
 	}
     m_TotalDirs = m_FirstDirs;
+
+    if (curDirRet < MAX_PATH) {
+        SetCurrentDirectory(curDirectory);
+    }
 }
 
 VOID CScanner::UnInit()
@@ -122,6 +179,15 @@ VOID CScanner::InitBaseDir()
     m_TotalDirs = m_FirstDirs;
 }
 
+std::wstring CScanner::GetScanResultFilePath() {
+    TCHAR fileName[MAX_PATH];
+    GetModuleFileName(NULL, fileName, MAX_PATH);
+    std::wstring filePath = fileName;
+    filePath = filePath.substr(0, filePath.rfind(L"\\"));
+    filePath.append(L"\\.scan_result");
+    return filePath;
+}
+
 VOID CScanner::SetScanTargetCallback(ScanTargetCallback callback)
 {
 	m_ScanTargetCallback = callback;
@@ -134,15 +200,6 @@ VOID CScanner::ClearResult()
     m_Done = FALSE;
     m_ImgDirectorys.clear();
 	DeleteFile(GetScanResultFilePath().c_str());
-}
-
-std::wstring CScanner::GetScanResultFilePath() {
-	TCHAR fileName[MAX_PATH];
-	GetModuleFileName(NULL, fileName, MAX_PATH);
-	std::wstring filePath = fileName;
-	filePath = filePath.substr(0, filePath.rfind(L"\\"));
-	filePath.append(L"\\.scan_result");
-	return filePath;
 }
 
 VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std::wstring> &targetDir, BOOL priority)
