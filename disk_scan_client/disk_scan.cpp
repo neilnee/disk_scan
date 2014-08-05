@@ -1,8 +1,9 @@
 #include "stdafx.h"
-#include "disk_scan.h"
 #include <windows.h>
 #include <vector>
 #include <ShlObj.h>
+#include "disk_scan.h"
+#include "sqlite3.h"
 
 #define PIPE_BUF_SIZE 1024
 #define TIMEOUT 12000
@@ -186,4 +187,9 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
     CloseHandle(pipe);
 	pipe = INVALID_HANDLE_VALUE;
     return 0;
+}
+
+VOID CDiskScan::ScanImgChange(DWORD threadID)
+{
+
 }

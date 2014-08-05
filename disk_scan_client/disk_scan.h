@@ -44,6 +44,8 @@ namespace xl_ds_api
         virtual ~CDiskScan();
     public :
         VOID ScanImgInProcess(DWORD threadID, LPTSTR request);
+
+        VOID ScanImgChange(DWORD threadID);
     };
 }
 
