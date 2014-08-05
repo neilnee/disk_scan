@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 10.00
 # Visual Studio 2008
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "disk_scan", "disk_scan\disk_scan.vcproj", "{ADEB4CEA-71E1-4630-A45F-9F39BFA4BE32}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "disk_scan_process", "disk_scan\disk_scan.vcproj", "{ADEB4CEA-71E1-4630-A45F-9F39BFA4BE32}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "disk_scan_client", "disk_scan_client\disk_scan_client.vcproj", "{E3437E59-12F1-43FE-8978-550EBDCF34B7}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "sqlite3", "sqlite3\sqlite3.vcproj", "{1C9793B8-82A7-49BF-880A-59ED71B21BA8}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -19,6 +21,10 @@ Global
 		{E3437E59-12F1-43FE-8978-550EBDCF34B7}.Debug|Win32.Build.0 = Debug|Win32
 		{E3437E59-12F1-43FE-8978-550EBDCF34B7}.Release|Win32.ActiveCfg = Release|Win32
 		{E3437E59-12F1-43FE-8978-550EBDCF34B7}.Release|Win32.Build.0 = Release|Win32
+		{1C9793B8-82A7-49BF-880A-59ED71B21BA8}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1C9793B8-82A7-49BF-880A-59ED71B21BA8}.Debug|Win32.Build.0 = Debug|Win32
+		{1C9793B8-82A7-49BF-880A-59ED71B21BA8}.Release|Win32.ActiveCfg = Release|Win32
+		{1C9793B8-82A7-49BF-880A-59ED71B21BA8}.Release|Win32.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

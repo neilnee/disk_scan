@@ -3,5 +3,7 @@
 *.ncb
 *.user
 *.suo
+*.dat
 
 debug/
+release/
