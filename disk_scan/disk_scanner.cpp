@@ -60,9 +60,11 @@ VOID CScanner::Init()
                         if (!FAILED(hr)) {
                             TCHAR path[MAX_PATH];
                             slPtr->GetPath(path, MAX_PATH, &findData, NULL);
-                            if(PathIsDirectory(path)) {
-                                std::wstring directory = path;
-                                PushBackDir(m_PriorityDirs, directory);
+                            std::wstring directory = path;
+                            if(directory.find(L"\\") != 0 && PathIsDirectory(path)) {
+                                if (PushBackDir(m_PriorityDirs, directory)){
+                                    m_FirstDirs++;
+                                }
                             }
                         }
                     }
@@ -131,7 +133,11 @@ BOOL CScanner::PushBackDir(std::vector<std::wstring> &dirList, std::wstring &dir
 VOID CScanner::InitBaseDir()
 {
     TCHAR szTemp[PATH_BUF_SIZE];
+    TCHAR sysVolume = '\0';
     szTemp[0] = '\0';
+    GetSystemDirectory(szTemp, MAX_PATH);
+    sysVolume = szTemp[0];
+
     DWORD ret = GetLogicalDriveStrings(PATH_BUF_SIZE -1, szTemp);
     if (ret) {
         TCHAR szDrive[4] = TEXT(" :\\");
@@ -160,9 +166,9 @@ VOID CScanner::InitBaseDir()
                         std::wstring fileName = fileData.cFileName;
 						std::wstring directory = szDrive+fileName;
 						if (fileName == L"Windows"
-							|| fileName == L"Program Files"
+							|| (szDrive[0] == sysVolume && (fileName == L"Program Files"
 							|| fileName == L"ProgramData"
-							|| fileName == L"Program Files (x86)") {
+							|| fileName == L"Program Files (x86)"))) {
 								PushBackDir(m_IgnoreDirs, directory);
 						}
                         if (PushBackDir(m_BaseDirs, directory)) {
