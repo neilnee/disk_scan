@@ -191,5 +191,65 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
 
 VOID CDiskScan::ScanImgChange(DWORD threadID)
 {
+    // 数据库写入分为两张表：目录监控表和文件监控表
+    // 首先读入目录表，得到需要扫描的目录列表
+    // 开始遍历目录列表中的每个目录
+    // 读取文件表中该目录的所有监控状态
+    // 遍历该目录下的全部文件，逐个将每个文件与读取的文件表做比对：
+    // 1、文件路径相同，CID+FileSize相同，认为是同一文件
+    // 处理比对结果：
+    // 1、数据库有、扫描结果有的文件：
+    // 2、数据库没有、扫描结果有的文件：加入上传队列
+    // 3、数据库有，扫描结果没有的文件：标记已删除，如果首次标记已删除，则增加删除时间
+    // 4、清理删除时间超过一定时间的记录
 
+    // 遍历完全部目录将结果返回回调
+
+
+    //TCHAR path[MAX_PATH];
+    //GetModuleFileName(NULL, path, MAX_PATH);
+    //std::wstring parentPath = path;
+    //parentPath = parentPath.substr(0, parentPath.rfind(L"\\"));
+    //parentPath.append(L"\\scan_result.dat");
+
+    //sqlite3 *db;
+    //INT ret = sqlite3_open16(parentPath.c_str(), &db);
+    //if (ret != SQLITE_OK) {
+    //    // 打开数据库失败
+    //    return;
+    //}
+    //
+    //sqlite3_stmt* stmt;
+    //LPCWSTR lpszTail = NULL;
+    //ret = sqlite3_prepare16_v2(db, L"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='scan_result'", -1, &stmt, (const void**)&lpszTail);
+
+    //ret = sqlite3_column_count(stmt);
+
+    //INT i = 0;
+}
+
+BOOL OpenDB(sqlite3 &db, sqlite3_stmt &stmt)
+{
+    // 打开数据库，检测是否存在文件变化监控状态表，如果不存在则创建该表
+    // 打开完成以后返回数据库和操作的stmt
+    // 失败返回FALSE
+    return FALSE;
+}
+
+BOOL ReadDB(sqlite3* db, sqlite3_stmt* stmt)
+{
+    // 读取一条监控数据，读完返回FALSE
+    return FALSE;
+}
+
+BOOL WriteDB(sqlite3* db, sqlite3_stmt* stmt)
+{
+    // 将一条监控数据写入数据库
+    return FALSE;
+}
+
+BOOL CloseDB(sqlite3* db, sqlite3_stmt* stmt)
+{
+    // 关闭数据库，释放资源
+    return FALSE;
 }

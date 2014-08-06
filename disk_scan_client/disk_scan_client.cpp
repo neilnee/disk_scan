@@ -3,12 +3,6 @@
 
 DWORD m_MainThreadID;
 
-// todo
-// 增加持久化扫描结果的逻辑
-// 处理对最近访问目录的优先扫描
-// 增加扫描监控目录变化的模块
-// 目录监控时对删除超过一定时间的记录的清理
-
 int _tmain(int argc, _TCHAR* argv[])
 {
 	MSG msg;
@@ -18,6 +12,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
     xl_ds_api::CDiskScan* diskScan = new xl_ds_api::CDiskScan();
     diskScan->ScanImgInProcess(m_MainThreadID, SCAN_REQUEST_IMG_AFREAH);
+    //diskScan->ScanImgChange(m_MainThreadID);
 
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
         if (ret == -1) {
