@@ -56,9 +56,13 @@ namespace xl_ds_api
         CDiskScan();
         virtual ~CDiskScan();
     public :
-        VOID ScanImgInProcess(DWORD threadID, LPTSTR request);
+        VOID StartPictureDirectoryScan(DWORD threadID, LPTSTR request);
 
-        VOID ScanImgChange(std::vector<std::wstring> &paths);
+		VOID StartPictrueAutoScan();
+
+		VOID StartPictureManualScan(std::vector<std::wstring> paths);
+
+		VOID AddMonitoringDirectory(std::vector<std::wstring> paths);
     };
 }
 
