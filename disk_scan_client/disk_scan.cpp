@@ -17,10 +17,13 @@ HANDLE m_MPMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MFMutex =CreateMutex(NULL, FALSE, NULL);
 
 std::wstring GetProcessPath();
+std::wstring UTF8ToUTF16(const char*src);
+std::string UTF16ToUTF8(const wchar_t* src);
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths);
 VOID WriteMonitoringPath(std::vector<std::wstring> paths);
+VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api::CScanFileInfo> &scanFiles);
+VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles);
 DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam);
-std::string UTF16ToUTF8(const wchar_t* src);
 
 CDiskScan::CDiskScan()
 {
@@ -31,12 +34,15 @@ CDiskScan::~CDiskScan()
     m_NotifyThreadIDs.clear();
     if (m_IPSMutex != INVALID_HANDLE_VALUE) {
         CloseHandle(m_IPSMutex);
+        m_IPSMutex = INVALID_HANDLE_VALUE;
     }
     if (m_MPMutex != INVALID_HANDLE_VALUE) {
         CloseHandle(m_MPMutex);
+        m_MPMutex = INVALID_HANDLE_VALUE;
     }
     if (m_MFMutex != INVALID_HANDLE_VALUE) {
         CloseHandle(m_MFMutex);
+        m_MFMutex = INVALID_HANDLE_VALUE;
     }
 }
 
@@ -178,7 +184,7 @@ DWORD WINAPI ScanImgProcessExecute(LPVOID lpParam)
         WaitForSingleObject(m_IPSMutex, INFINITE);
         std::vector<DWORD>::iterator iter;
         for (iter = m_NotifyThreadIDs.begin(); iter != m_NotifyThreadIDs.end(); iter++) {
-            xl_ds_api::CScanInfo* scanInfo = new xl_ds_api::CScanInfo();
+            xl_ds_api::CScanPathInfo* scanInfo = new xl_ds_api::CScanPathInfo();
             scanInfo->m_EventCode = eventCode;
 			scanInfo->m_ScanCount = scanCount;
 			scanInfo->m_TotalCount = totalCount;
@@ -326,6 +332,16 @@ ExitFree:
     sqlite3_finalize(ppStmt);
     sqlite3_close_v2(db);
     ReleaseMutex(m_IPSMutex);
+}
+
+VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api::CScanFileInfo> &scanFiles)
+{
+
+}
+
+VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles)
+{
+
 }
 
 std::wstring GetProcessPath()

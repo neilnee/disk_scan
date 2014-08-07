@@ -28,16 +28,26 @@ namespace xl_ds_api
 		LPTSTR m_RequestCode;
 	};
 
-    class CScanInfo
+    class CScanPathInfo
     {
     public :
-        CScanInfo() {} 
-        virtual ~CScanInfo() {}
+        CScanPathInfo() {} 
+        virtual ~CScanPathInfo() {}
     public :
         INT m_EventCode;
 		INT m_ScanCount;
 		INT m_TotalCount;
         std::wstring m_Path;
+    };
+
+    class CScanFileInfo
+    {
+    public :
+        CScanFileInfo() {}
+        virtual ~CScanFileInfo() {}
+    public :
+        std::wstring m_Path;
+        std::wstring m_Name;
     };
 
     class CDiskScan

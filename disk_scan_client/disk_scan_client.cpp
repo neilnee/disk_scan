@@ -20,11 +20,11 @@ int _tmain(int argc, _TCHAR* argv[])
         } else {
             if (msg.message > WM_USER) {
 				if (msg.message == SCAN_MSG_IMG_PROCESS) {
-					xl_ds_api::CScanInfo* infoPtr = reinterpret_cast<xl_ds_api::CScanInfo*>(msg.wParam);
+					xl_ds_api::CScanPathInfo* infoPtr = reinterpret_cast<xl_ds_api::CScanPathInfo*>(msg.wParam);
 					if (infoPtr == NULL) {
 						continue;
 					}
-					xl_ds_api::CScanInfo info = *infoPtr;
+					xl_ds_api::CScanPathInfo info = *infoPtr;
 					delete infoPtr;
                     _tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
                     if (info.m_EventCode == SCAN_RESULT) {
