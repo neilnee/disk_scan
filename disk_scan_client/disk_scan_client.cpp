@@ -12,10 +12,7 @@ int _tmain(int argc, _TCHAR* argv[])
     std::vector<std::wstring> paths;
 
     xl_ds_api::CDiskScan* diskScan = new xl_ds_api::CDiskScan();
-    diskScan->ScanImgInProcess(m_MainThreadID, SCAN_REQUEST_IMG_AFREAH);
-    //diskScan->ScanImgChange(paths);
-
-    
+    diskScan->ScanImgInProcess(m_MainThreadID, SCAN_REQUEST_IMG);
 
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
         if (ret == -1) {

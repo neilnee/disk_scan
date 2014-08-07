@@ -305,7 +305,7 @@ VOID WriteMonitoringPath(std::vector<std::wstring> paths)
         (const void**)&pzTail) != SQLITE_OK) || (sqlite3_step(ppStmt) != SQLITE_ROW) || (sqlite3_column_int(ppStmt, 0) <= 0)) {
             if (sqlite3_exec(
                 db,
-                "CREATE TABLE monitoring_path (path varchar(260))",
+                "CREATE TABLE monitoring_path (path varchar(260) UNIQUE)",
                 NULL,
                 NULL,
                 NULL) != SQLITE_OK) {
