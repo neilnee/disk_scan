@@ -9,10 +9,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	BOOL ret;
 
 	m_MainThreadID = GetCurrentThreadId();
+    std::vector<std::wstring> paths;
 
     xl_ds_api::CDiskScan* diskScan = new xl_ds_api::CDiskScan();
     diskScan->ScanImgInProcess(m_MainThreadID, SCAN_REQUEST_IMG_AFREAH);
-    //diskScan->ScanImgChange(m_MainThreadID);
+    //diskScan->ScanImgChange(paths);
+
+    
 
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
         if (ret == -1) {
@@ -27,9 +30,12 @@ int _tmain(int argc, _TCHAR* argv[])
 					xl_ds_api::CScanInfo info = *infoPtr;
 					delete infoPtr;
                     _tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
-                    /*if (info.m_EventCode == SCAN_STOP) {
-                        _tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
-                    }*/
+                    if (info.m_EventCode == SCAN_RESULT) {
+                        paths.push_back(info.m_Path);
+                    }
+                    if (info.m_EventCode == SCAN_FINISH) {
+                        diskScan->ScanImgChange(paths);
+                    }
 				}
             } else {
                 TranslateMessage(&msg); 

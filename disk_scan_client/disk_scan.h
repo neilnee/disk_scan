@@ -1,6 +1,9 @@
 #ifndef _DISK_SCAN_H_
 #define _DISK_SCAN_H_
 
+#include <vector>
+#include <string>
+
 #define SCAN_MSG_IMG_PROCESS WM_USER + 500
 
 #define SCAN_REQUEST_IMG L"scan_img"
@@ -45,7 +48,7 @@ namespace xl_ds_api
     public :
         VOID ScanImgInProcess(DWORD threadID, LPTSTR request);
 
-        VOID ScanImgChange(DWORD threadID);
+        VOID ScanImgChange(std::vector<std::wstring> &paths);
     };
 }
 
