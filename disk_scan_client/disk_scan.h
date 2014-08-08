@@ -46,8 +46,15 @@ namespace xl_ds_api
         CScanFileInfo() {}
         virtual ~CScanFileInfo() {}
     public :
+        std::wstring m_FullPath;
         std::wstring m_Path;
         std::wstring m_Name;
+        std::string m_CID;
+        INT m_State;
+        DWORD m_LastModifyHigh;
+        DWORD m_LastModifyLow;
+        DWORD m_FileSizeHigh;
+        DWORD m_FileSizeLow;
     };
 
     class CDiskScan

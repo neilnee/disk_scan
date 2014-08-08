@@ -4,6 +4,8 @@
 #include <ShlObj.h>
 #include "disk_scan.h"
 #include "sqlite3.h"
+#include "disk_scan_util.h"
+#include "disk_scan_db.h"
 
 #define PIPE_BUF_SIZE 1024
 #define TIMEOUT 12000
@@ -17,9 +19,6 @@ HANDLE m_IPSMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MPMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MFMutex =CreateMutex(NULL, FALSE, NULL);
 
-std::wstring GetProcessPath();
-std::wstring UTF8ToUTF16(const char*src);
-std::string UTF16ToUTF8(const wchar_t* src);
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths);
 VOID WriteMonitoringPath(std::vector<std::wstring> paths);
 VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api::CScanFileInfo> &scanFiles);
@@ -80,6 +79,35 @@ VOID CDiskScan::StartPictureDirectoryScan(DWORD threadID, LPTSTR requestCode)
 VOID CDiskScan::StartPictrueAutoScan()
 {
 	// 启动文件的自动扫描和上传任务PictureAutoScanExecute线程
+    std::vector<std::wstring> paths;
+    std::vector<std::wstring>::iterator iter;
+    std::vector<xl_ds_api::CScanFileInfo> files;
+    ReadMonitoringPath(paths);
+    for (iter = paths.begin(); iter != paths.end(); iter++) {
+        if (SetCurrentDirectory((*iter).c_str())) {
+            WIN32_FIND_DATA findData;
+            HANDLE handle = FindFirstFile(L"*.jpg", &findData);
+            if (handle != INVALID_HANDLE_VALUE) {
+                BOOL finish = FALSE;
+                do {
+                    xl_ds_api::CScanFileInfo fileInfo;
+                    fileInfo.m_Path = (*iter);
+                    fileInfo.m_Name = findData.cFileName;
+                    fileInfo.m_FullPath = (*iter) + findData.cFileName;
+                    fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
+                    fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
+                    fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
+                    fileInfo.m_FileSizeLow = findData.nFileSizeLow;
+                    files.push_back(fileInfo);
+                    finish = !FindNextFile(handle, &findData);
+                } while (!finish);
+            }
+            FindClose(handle);
+        }
+    }
+    WriteMonitoringFiles(files);
+    std::vector<xl_ds_api::CScanFileInfo> fileResult;
+    ReadMonitoringFiles(paths, fileResult);
 }
 
 VOID CDiskScan::StartPictureManualScan(std::vector<std::wstring> paths)
@@ -235,22 +263,6 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 {
-	// 读取监控目录
-	// 读取全部的文件记录
-	//for (iter = paths.begin(); iter != paths.end(); iter++) {
-	//    // 遍历该监控目录中的文件
-	//    if (SetCurrentDirectory((*iter).c_str())) {
-	//        WIN32_FIND_DATA findData;
-	//        HANDLE handle = FindFirstFile(L"*", &findData);
-	//        while (handle != INVALID_HANDLE_VALUE) {
-	//            // 比对文件与数据库记录
-	//            FindNextFile(handle, &findData);
-	//        }
-	//        FindClose(handle);
-	//        handle = INVALID_HANDLE_VALUE;
-	//    }
-	//    // 更新文件记录数据库
-	//}
 	return 0;
 }
 
@@ -269,124 +281,132 @@ DWORD WINAPI AddMonitoringDirectoryExecute(LPVOID lpParam)
 
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths) 
 {
-    sqlite3 *db;
-    sqlite3_stmt *ppStmt;
-    LPCWSTR pzTail = NULL;
+    xl_ds_api::CDiskScanDB db;
     std::wstring dbPath = GetProcessPath();
-    dbPath.append(L"\\scan_data.dat");
+    dbPath.append(L"\\scan_path.dat");
 
     WaitForSingleObject(m_MPMutex, INFINITE);
-    if (sqlite3_open16(dbPath.c_str(), &db)) {
+    if (!db.Open(dbPath.c_str())) {
         goto ExitFree;
     }
-    if ((sqlite3_prepare16_v2(
-            db,
-            L"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='monitoring_path'", 
-            -1, 
-            &ppStmt, 
-            (const void**)&pzTail) != SQLITE_OK) || (sqlite3_step(ppStmt) != SQLITE_ROW) || (sqlite3_column_int(ppStmt, 0) <= 0)) {
+    if (!db.CheckTable(L"monitoring_path")) {
         goto ExitFree;
     }
-    sqlite3_reset(ppStmt);
-    if (sqlite3_prepare16_v2(
-            db, 
-            L"SELECT path FROM monitoring_path", 
-            -1, 
-            &ppStmt, 
-            (const void**)&pzTail) != SQLITE_OK) {
-        // 搜索监控目录失败
+    if (!db.Prepare(L"SELECT path FROM monitoring_path")) {
         goto ExitFree;
     }
-    while(sqlite3_step(ppStmt) == SQLITE_ROW) {
-        paths.push_back((LPCWSTR)sqlite3_column_text16(ppStmt, 0));
+    while(db.Step()) {
+        if (db.GetText16(0)) {
+            paths.push_back(db.GetText16(0));
+        }
     }
 ExitFree:
-    sqlite3_finalize(ppStmt);
-    sqlite3_close_v2(db);
+    db.Close();
     ReleaseMutex(m_MPMutex);
 }
 
 VOID WriteMonitoringPath(std::vector<std::wstring> paths)
 {
-    sqlite3 *db;
-    sqlite3_stmt *ppStmt;
-    LPCWSTR pzTail = NULL;
+    xl_ds_api::CDiskScanDB db;
     std::wstring dbPath = GetProcessPath();
-    dbPath.append(L"\\scan_data.dat");
+    dbPath.append(L"\\scan_path.dat");
+    std::vector<std::wstring>::iterator iter;
 
     WaitForSingleObject(m_MPMutex, INFINITE);
-    std::vector<std::wstring>::iterator iter;
-    if (sqlite3_open16(dbPath.c_str(), &db)) {
+    if (!db.Open(dbPath.c_str())) {
         goto ExitFree;
     }
-    if ((sqlite3_prepare16_v2(
-        db,
-        L"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='monitoring_path'", 
-        -1, 
-        &ppStmt, 
-        (const void**)&pzTail) != SQLITE_OK) || (sqlite3_step(ppStmt) != SQLITE_ROW) || (sqlite3_column_int(ppStmt, 0) <= 0)) {
-            if (sqlite3_exec(
-                db,
-                "CREATE TABLE monitoring_path (path varchar(260) UNIQUE)",
-                NULL,
-                NULL,
-                NULL) != SQLITE_OK) {
+    if (!db.CheckTable(L"monitoring_path")) {
+            if (!db.Exec("CREATE TABLE monitoring_path (path varchar(260) UNIQUE)")) {
                 goto ExitFree;
             }
     }
     for (iter = paths.begin(); iter != paths.end(); iter++) {
-        CHAR buf[1024] = {0};
-        sprintf(buf, "INSERT INTO monitoring_path VALUES ('%s')", UTF16ToUTF8((*iter).c_str()).c_str());
-        sqlite3_exec(
-            db,
-            buf,
-            NULL,
-            NULL,
-            NULL);
+        CHAR sql[SQL_BUF] = {0};
+        sprintf(sql, "INSERT INTO monitoring_path VALUES ('%s')", UTF16ToUTF8((*iter).c_str()).c_str());
+        db.Exec(sql);
     }
 ExitFree:
-    sqlite3_finalize(ppStmt);
-    sqlite3_close_v2(db);
+    db.Close();
     ReleaseMutex(m_IPSMutex);
 }
 
 VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api::CScanFileInfo> &scanFiles)
 {
-	// 读取数据库中paths路径对应的文件记录
+    xl_ds_api::CDiskScanDB db;
+    std::wstring dbPath = GetProcessPath();
+    dbPath.append(L"\\scan_file.dat");
+    std::wstring sql;
+    std::vector<std::wstring>::iterator iter;
+
+    WaitForSingleObject(m_MPMutex, INFINITE);
+    if (!db.Open(dbPath.c_str())) {
+        goto ExitFree;
+    }
+    if (!db.CheckTable(L"monitoring_file")) {
+        goto ExitFree;
+    }
+    sql.append(L"SELECT * FROM monitoring_file");
+    /*if (paths.size() > 0) {
+        sql.append(L"WHERE path IN(");
+        for (iter = paths.begin(); iter != paths.end(); iter++) {
+            sql.append(L"'");
+            sql.append(*iter);
+            sql.append(L"'");
+        }
+    }*/
+    if (!db.Prepare(sql.c_str())) {
+        goto ExitFree;
+    }
+    while(db.Step()) {
+        xl_ds_api::CScanFileInfo fileInfo;
+        fileInfo.m_FullPath = db.GetText16(0);
+        fileInfo.m_Path = db.GetText16(1);
+        fileInfo.m_Name = db.GetText16(2);
+        fileInfo.m_CID = db.GetText(3);
+        fileInfo.m_State = db.GetInt(4);
+        fileInfo.m_LastModifyHigh = db.GetInt64(5);
+        fileInfo.m_LastModifyLow = db.GetInt64(6);
+        fileInfo.m_FileSizeHigh = db.GetInt64(7);
+        fileInfo.m_FileSizeLow = db.GetInt64(8);
+        scanFiles.push_back(fileInfo);
+    }
+ExitFree:
+    db.Close();
+    ReleaseMutex(m_MPMutex);
 }
 
 VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles)
 {
-	// 将文件记录写入数据库
-}
+    xl_ds_api::CDiskScanDB db;
+    std::wstring dbPath = GetProcessPath();
+    dbPath.append(L"\\scan_file.dat");
+    std::vector<xl_ds_api::CScanFileInfo>::iterator iter;
 
-std::wstring GetProcessPath()
-{
-    TCHAR path[MAX_PATH];
-    GetModuleFileName(NULL, path, MAX_PATH);
-    std::wstring processPath = path;
-    processPath = processPath.substr(0, processPath.rfind(L"\\"));
-    return processPath;
-}
-
-std::string UTF16ToUTF8(const wchar_t* src)
-{
-    int cch2 = ::WideCharToMultiByte(CP_UTF8, 0, src, ::wcslen(src), 0, 0, 0, 0);
-    char* str2  = new char[cch2 + 1];
-    ::WideCharToMultiByte(CP_UTF8, 0, src, ::wcslen(src), str2, cch2 + 1, 0, 0);
-    str2[cch2] = '\0';
-    std::string destStr = str2;
-    delete []str2;
-    return destStr;
-}
-
-std::wstring UTF8ToUTF16(const char*src)
-{
-    int cch2 = ::MultiByteToWideChar(CP_UTF8, 0, src, ::strlen(src), NULL, 0);
-    wchar_t* str2 = new wchar_t[cch2 + 1];
-    ::MultiByteToWideChar(CP_UTF8, 0, src, ::strlen(src), str2, cch2);
-    str2[cch2] = L'\0';
-    std::wstring destStr = str2;
-    delete []str2;
-    return destStr;
+    WaitForSingleObject(m_MFMutex, INFINITE);
+    if (!db.Open(dbPath.c_str())) {
+        goto ExitFree;
+    }
+    if (!db.CheckTable(L"monitoring_file")) {
+        if (!db.Exec("CREATE TABLE monitoring_file (fullpath VARCHAR(255) PRIMARY KEY, path VARCHAR(255), name VARCHAR(255), cid VARCHAR(255), state INT, modify_h UNSIGNED BIG INT, modify_l UNSIGNED BIG INT, filesize_h UNSIGNED BIG INT, filesize_l UNSIGNED BIG INT)")) {
+            goto ExitFree;
+        }
+    }
+    for (iter = scanFiles.begin(); iter != scanFiles.end(); iter++) {
+        CHAR sql[1024] = {0};
+        sprintf(sql, "INSERT INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
+            UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str(),
+            UTF16ToUTF8((*iter).m_Path.c_str()).c_str(),
+            UTF16ToUTF8((*iter).m_Name.c_str()).c_str(),
+            (*iter).m_CID.c_str(),
+            (*iter).m_State,
+            (*iter).m_LastModifyHigh,
+            (*iter).m_LastModifyLow,
+            (*iter).m_FileSizeHigh,
+            (*iter).m_FileSizeLow);
+        db.Exec(sql);
+    }
+ExitFree:
+    db.Close();
+    ReleaseMutex(m_MFMutex);
 }

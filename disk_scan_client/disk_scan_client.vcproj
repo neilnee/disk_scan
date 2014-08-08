@@ -211,6 +211,14 @@
 				>
 			</File>
 			<File
+				RelativePath=".\disk_scan_db.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\disk_scan_util.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\stdafx.cpp"
 				>
 				<FileConfiguration
@@ -238,6 +246,14 @@
 			>
 			<File
 				RelativePath=".\disk_scan.h"
+				>
+			</File>
+			<File
+				RelativePath=".\disk_scan_db.h"
+				>
+			</File>
+			<File
+				RelativePath=".\disk_scan_util.h"
 				>
 			</File>
 			<File

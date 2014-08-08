@@ -12,7 +12,8 @@ int _tmain(int argc, _TCHAR* argv[])
     std::vector<std::wstring> paths;
 
     xl_ds_api::CDiskScan* diskScan = new xl_ds_api::CDiskScan();
-    diskScan->StartPictureDirectoryScan(m_MainThreadID, SCAN_REQUEST_IMG);
+    //diskScan->StartPictureDirectoryScan(m_MainThreadID, SCAN_REQUEST_IMG);
+    diskScan->StartPictrueAutoScan();
 
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
         if (ret == -1) {
