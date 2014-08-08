@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <vector>
 #include <map>
+#include <algorithm>
 #include <ShlObj.h>
 #include "disk_scan.h"
 #include "disk_scan_util.h"
@@ -11,6 +12,9 @@
 #define TIMEOUT 12000
 
 using namespace xl_ds_api;
+
+static const std::wstring IMG_SUFFIX[] = {
+	L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
 
 std::vector<DWORD> m_NotifyThreadIDs;
 BOOL m_PicDirScanning = FALSE;
@@ -75,10 +79,24 @@ VOID CDiskScan::StartPictrueAutoScan()
 		std::vector<xl_ds_api::CScanFileInfo> updateFiles;
         if (SetCurrentDirectory((*iter).c_str())) {
             WIN32_FIND_DATA findData;
-            HANDLE handle = FindFirstFile(L"*.jpg", &findData);
+            HANDLE handle = FindFirstFile(L"*.*", &findData);
             if (handle != INVALID_HANDLE_VALUE) {
                 BOOL finish = FALSE;
                 do {
+					std::wstring strFileName = findData.cFileName;
+					if (strFileName == L"." || strFileName == L"..") {
+						finish = !FindNextFile(handle, &findData);
+						continue;
+					}
+					// 过滤非目标图片
+					std::wstring::size_type suffixPos = strFileName.rfind(L".");
+					std::wstring suffix = strFileName.substr(suffixPos);
+					std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
+					if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
+						finish = !FindNextFile(handle, &findData);
+						continue;
+					}
+
 					xl_ds_api::CScanFileInfo fileInfo;
 					fileInfo.m_Path = (*iter);
 					fileInfo.m_Name = findData.cFileName;
@@ -355,11 +373,13 @@ VOID WriteMonitoringPath(std::vector<std::wstring> paths)
                 goto ExitFree;
             }
     }
+	db.Exec("BEGIN TRANSACTION");
     for (iter = paths.begin(); iter != paths.end(); iter++) {
         CHAR sql[SQL_BUF] = {0};
         sprintf(sql, "INSERT INTO monitoring_path VALUES ('%s')", UTF16ToUTF8((*iter).c_str()).c_str());
         db.Exec(sql);
     }
+	db.Exec("COMMIT TRANSACTION");
 ExitFree:
     db.Close();
     ReleaseMutex(m_IPSMutex);
@@ -417,9 +437,10 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> files)
             goto ExitFree;
         }
     }
+	db.Exec("BEGIN TRANSACTION");
     for (iter = files.begin(); iter != files.end(); iter++) {
         CHAR sql[1024] = {0};
-        sprintf(sql, "INSERT INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
+        sprintf(sql, "INSERT OR REPLACE INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
             UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str(),
             UTF16ToUTF8((*iter).m_Path.c_str()).c_str(),
             UTF16ToUTF8((*iter).m_Name.c_str()).c_str(),
@@ -431,6 +452,7 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> files)
             (*iter).m_FileSizeLow);
         db.Exec(sql);
     }
+	db.Exec("COMMIT TRANSACTION");
 ExitFree:
     db.Close();
     ReleaseMutex(m_MFMutex);
