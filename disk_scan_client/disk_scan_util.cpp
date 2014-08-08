@@ -23,7 +23,7 @@ std::string UTF16ToUTF8(const wchar_t* src)
     return destStr;
 }
 
-std::wstring UTF8ToUTF16(const char*src)
+std::wstring UTF8ToUTF16(const char* src)
 {
     int cch2 = ::MultiByteToWideChar(CP_UTF8, 0, src, ::strlen(src), NULL, 0);
     wchar_t* str2 = new wchar_t[cch2 + 1];
@@ -32,4 +32,19 @@ std::wstring UTF8ToUTF16(const char*src)
     std::wstring destStr = str2;
     delete []str2;
     return destStr;
+}
+
+BOOL CreateDownloadTask(std::vector<xl_ds_api::CScanFileInfo> files)
+{
+	return TRUE;
+}
+
+BOOL SetDownloadInfo(xl_ds_api::CScanFileInfo fileInfo)
+{
+	return TRUE;
+}
+
+std::string CIDCalculate(std::wstring path)
+{
+	return UTF16ToUTF8(path.c_str());
 }

@@ -4,7 +4,10 @@
 #include <vector>
 #include <string>
 
-#define SCAN_MSG_IMG_PROCESS WM_USER + 500
+#define DSMSG_DIR_SCAN WM_USER + 500
+#define DSMSG_PIC_SCAN WM_USER + 501
+#define DSMSG_LOAD_DIR WM_USER + 502
+#define DSMSG_ADD_DIR WM_USER +503
 
 #define SCAN_REQUEST_IMG L"scan_img"
 #define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
@@ -50,6 +53,7 @@ namespace xl_ds_api
         std::wstring m_Path;
         std::wstring m_Name;
         std::string m_CID;
+		// 状态信息，0表示已上传；其它表示删除时间
         INT m_State;
         DWORD m_LastModifyHigh;
         DWORD m_LastModifyLow;
@@ -70,6 +74,8 @@ namespace xl_ds_api
 		VOID StartPictureManualScan(std::vector<std::wstring> paths);
 
 		VOID AddMonitoringDirectory(std::vector<std::wstring> paths);
+
+		VOID LoadMonitoringDirectory();
     };
 }
 

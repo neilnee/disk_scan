@@ -1,9 +1,9 @@
 #include "stdafx.h"
 #include <windows.h>
 #include <vector>
+#include <map>
 #include <ShlObj.h>
 #include "disk_scan.h"
-#include "sqlite3.h"
 #include "disk_scan_util.h"
 #include "disk_scan_db.h"
 
@@ -14,40 +14,22 @@ using namespace xl_ds_api;
 
 std::vector<DWORD> m_NotifyThreadIDs;
 BOOL m_PicDirScanning = FALSE;
-BOOL m_PicAutoScanning = FALSE;
+BOOL m_PicScanning = FALSE;
 HANDLE m_IPSMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MPMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MFMutex =CreateMutex(NULL, FALSE, NULL);
 
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths);
 VOID WriteMonitoringPath(std::vector<std::wstring> paths);
-VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api::CScanFileInfo> &scanFiles);
+VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo > &scanFiles);
 VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles);
+VOID DeleteMonitoringFiles(std::vector<std::wstring> fullPaths);
 
 DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam);
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam);
 DWORD WINAPI PictureManualScanExecute(LPVOID lpParam);
 DWORD WINAPI AddMonitoringDirectoryExecute(LPVOID lpParam);
-
-// 数据库写入分为两张表：目录监控表和文件监控表
-// 首先读入目录表，得到需要扫描的目录列表
-// 开始遍历目录列表中的每个目录
-// 读取文件表中该目录的所有监控状态
-// 遍历该目录下的全部文件，逐个将每个文件与读取的文件表做比对：
-// 1、根据路径匹配数据库记录
-// 2、如果没有匹配，计算文件CID再次匹配，如果匹配则认为已经上传
-// 2、如果匹配到路径，比较修改时间和文件大小，如果相同则认为已经上传
-// 3、如果不同，则比较CID，如果相同则认为已经上传
-// 4、如果不同，则认为没有上传
-// 处理比对结果：
-// 1、数据库有、扫描结果有的文件：
-// 2、数据库没有、扫描结果有的文件：加入上传队列
-// 3、数据库有，扫描结果没有的文件：标记已删除，如果首次标记已删除，则增加删除时间
-// 4、清理删除时间超过一定时间的记录
-
-// 数据库结构 cid, size, path, name, modify, state
-// state分为已上传、已删除
-// 遍历完全部目录将结果返回回调
+DWORD WINAPI LoadMonitoringDirectoryExecute(LPVOID lpParam);
 
 CDiskScan::CDiskScan()
 {
@@ -78,47 +60,91 @@ VOID CDiskScan::StartPictureDirectoryScan(DWORD threadID, LPTSTR requestCode)
 
 VOID CDiskScan::StartPictrueAutoScan()
 {
-	// 启动文件的自动扫描和上传任务PictureAutoScanExecute线程
+	//读取监控目录
     std::vector<std::wstring> paths;
-    std::vector<std::wstring>::iterator iter;
-    std::vector<xl_ds_api::CScanFileInfo> files;
-    ReadMonitoringPath(paths);
+	ReadMonitoringPath(paths);
+
+	//读取数据库中的监控文件信息
+	std::map<std::wstring, xl_ds_api::CScanFileInfo> files;
+	ReadMonitoringFiles(paths, files);
+    
+	std::vector<std::wstring>::iterator iter;
     for (iter = paths.begin(); iter != paths.end(); iter++) {
+		// 遍历监控目录，记录当前目录下需要更新的文件（新增和更新）
+		
+		std::vector<xl_ds_api::CScanFileInfo> updateFiles;
         if (SetCurrentDirectory((*iter).c_str())) {
             WIN32_FIND_DATA findData;
             HANDLE handle = FindFirstFile(L"*.jpg", &findData);
             if (handle != INVALID_HANDLE_VALUE) {
                 BOOL finish = FALSE;
                 do {
-                    xl_ds_api::CScanFileInfo fileInfo;
-                    fileInfo.m_Path = (*iter);
-                    fileInfo.m_Name = findData.cFileName;
-                    fileInfo.m_FullPath = (*iter) + findData.cFileName;
-                    fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
-                    fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
-                    fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
-                    fileInfo.m_FileSizeLow = findData.nFileSizeLow;
-                    files.push_back(fileInfo);
+					xl_ds_api::CScanFileInfo fileInfo;
+					fileInfo.m_Path = (*iter);
+					fileInfo.m_Name = findData.cFileName;
+					fileInfo.m_FullPath = (*iter) + findData.cFileName;
+					fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
+					fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
+					fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
+					fileInfo.m_FileSizeLow = findData.nFileSizeLow;
+					fileInfo.m_State = 0;
+
+					// 1、根据路径匹配数据库记录
+					std::map<std::wstring, xl_ds_api::CScanFileInfo>::iterator foundIter = files.find(fileInfo.m_FullPath);
+					if (foundIter == files.end()) {
+						// 2、如果没有匹配，认为是新增文件（加入上传）
+						updateFiles.push_back(fileInfo);
+					} else {
+						// 3、如果匹配到路径，比较修改时间、文件大小、CID，来确认是否是同一个文件
+						xl_ds_api::CScanFileInfo foundInfo = (*foundIter).second;
+						if (foundInfo.m_LastModifyHigh == fileInfo.m_LastModifyHigh 
+							&& foundInfo.m_LastModifyLow == fileInfo.m_LastModifyLow
+							&& foundInfo.m_FileSizeHigh == fileInfo.m_FileSizeHigh
+							&& foundInfo.m_FileSizeLow == fileInfo.m_FileSizeLow
+							&& foundInfo.m_CID == (fileInfo.m_CID = CIDCalculate(fileInfo.m_FullPath))) {
+								// 4、如果是同一个文件，若之前删除了这个文件，则要重新上传
+								if (foundInfo.m_State > 0) {
+									updateFiles.push_back(fileInfo);
+								}
+						} else {
+							// 5、如果不是同一个文件，则需要上传
+							updateFiles.push_back(fileInfo);
+						}
+						files.erase(foundIter);
+					}
                     finish = !FindNextFile(handle, &findData);
                 } while (!finish);
             }
             FindClose(handle);
         }
+		if (updateFiles.size() > 0 && CreateDownloadTask(updateFiles)) {
+			WriteMonitoringFiles(updateFiles);
+		}
     }
-    WriteMonitoringFiles(files);
-    std::vector<xl_ds_api::CScanFileInfo> fileResult;
-    ReadMonitoringFiles(paths, fileResult);
+	// 遍历files中剩余的没有被匹配过的数据，根据删除时间更新数据库
+	// 删除时间<=0则表示本次扫描时发现被删除，更新删除时间为当前时间
+	// 删除时间>0则比较是否符合删除条件（超过一定时间显示）
+	// 符合则从数据库中删除，不符合则不更新数据库
 }
 
 VOID CDiskScan::StartPictureManualScan(std::vector<std::wstring> paths)
 {
 	// 启动文件的手动扫描和上传任务PictureUploadExecute线程
+	// 过滤掉已经监控的目录
+	// 遍历目标目录全部图片文件信息，创建任务
+	// 创建任务成功则将目标目录添入监控
+	// 依次计算文件CID，添加到任务信息中
+	// 更新数据库
 }
 
 VOID CDiskScan::AddMonitoringDirectory(std::vector<std::wstring> paths)
 {
-	// 启动添加监控目录AddMonitoringDirectoryExecute线程
 	WriteMonitoringPath(paths);
+}
+
+VOID CDiskScan::LoadMonitoringDirectory()
+{
+
 }
 
 DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
@@ -247,7 +273,7 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 			scanInfo->m_ScanCount = scanCount;
 			scanInfo->m_TotalCount = totalCount;
 			scanInfo->m_Path = path;
-			PostThreadMessage(*iter, SCAN_MSG_IMG_PROCESS, reinterpret_cast<WPARAM>(scanInfo), 0);
+			PostThreadMessage(*iter, DSMSG_DIR_SCAN, reinterpret_cast<WPARAM>(scanInfo), 0);
 		}
 		if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
 			m_NotifyThreadIDs.clear();
@@ -263,18 +289,26 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 {
+	m_PicScanning = TRUE;
+
+	m_PicScanning = FALSE;
 	return 0;
 }
 
 DWORD WINAPI PictureManualScanExecute(LPVOID lpParam)
 {
-	// 遍历目录创建任务
-	// 添加目录进监控目录
-	// 计算文件信息，更新数据库
+	m_PicScanning = TRUE;
+
+	m_PicScanning = FALSE;
 	return 0;
 }
 
 DWORD WINAPI AddMonitoringDirectoryExecute(LPVOID lpParam)
+{
+	return 0;
+}
+
+DWORD WINAPI LoadMonitoringDirectoryExecute(LPVOID lpParam)
 {
 	return 0;
 }
@@ -331,13 +365,12 @@ ExitFree:
     ReleaseMutex(m_IPSMutex);
 }
 
-VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api::CScanFileInfo> &scanFiles)
+VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo > &files)
 {
     xl_ds_api::CDiskScanDB db;
     std::wstring dbPath = GetProcessPath();
     dbPath.append(L"\\scan_file.dat");
     std::wstring sql;
-    std::vector<std::wstring>::iterator iter;
 
     WaitForSingleObject(m_MPMutex, INFINITE);
     if (!db.Open(dbPath.c_str())) {
@@ -347,14 +380,6 @@ VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api:
         goto ExitFree;
     }
     sql.append(L"SELECT * FROM monitoring_file");
-    /*if (paths.size() > 0) {
-        sql.append(L"WHERE path IN(");
-        for (iter = paths.begin(); iter != paths.end(); iter++) {
-            sql.append(L"'");
-            sql.append(*iter);
-            sql.append(L"'");
-        }
-    }*/
     if (!db.Prepare(sql.c_str())) {
         goto ExitFree;
     }
@@ -369,14 +394,14 @@ VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::vector<xl_ds_api:
         fileInfo.m_LastModifyLow = db.GetInt64(6);
         fileInfo.m_FileSizeHigh = db.GetInt64(7);
         fileInfo.m_FileSizeLow = db.GetInt64(8);
-        scanFiles.push_back(fileInfo);
+		files.insert(std::map<std::wstring, xl_ds_api::CScanFileInfo>::value_type(fileInfo.m_FullPath, fileInfo));
     }
 ExitFree:
     db.Close();
     ReleaseMutex(m_MPMutex);
 }
 
-VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles)
+VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> files)
 {
     xl_ds_api::CDiskScanDB db;
     std::wstring dbPath = GetProcessPath();
@@ -392,7 +417,7 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles)
             goto ExitFree;
         }
     }
-    for (iter = scanFiles.begin(); iter != scanFiles.end(); iter++) {
+    for (iter = files.begin(); iter != files.end(); iter++) {
         CHAR sql[1024] = {0};
         sprintf(sql, "INSERT INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
             UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str(),
@@ -409,4 +434,9 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles)
 ExitFree:
     db.Close();
     ReleaseMutex(m_MFMutex);
+}
+
+VOID DeleteMonitoringFiles(std::vector<std::wstring> fullPaths)
+{
+
 }

@@ -20,7 +20,7 @@ int _tmain(int argc, _TCHAR* argv[])
             break;
         } else {
             if (msg.message > WM_USER) {
-				if (msg.message == SCAN_MSG_IMG_PROCESS) {
+				if (msg.message == DSMSG_DIR_SCAN) {
 					xl_ds_api::CScanPathInfo* infoPtr = reinterpret_cast<xl_ds_api::CScanPathInfo*>(msg.wParam);
 					if (infoPtr == NULL) {
 						continue;
