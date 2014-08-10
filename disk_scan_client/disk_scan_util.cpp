@@ -1,8 +1,6 @@
 #include "stdafx.h"
 #include "disk_scan_util.h"
 
-#define SQL_BUF 1024
-
 std::wstring GetProcessPath()
 {
     TCHAR path[MAX_PATH];

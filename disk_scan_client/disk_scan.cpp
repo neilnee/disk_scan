@@ -4,12 +4,16 @@
 #include <map>
 #include <algorithm>
 #include <ShlObj.h>
+#include <time.h>
 #include "disk_scan.h"
 #include "disk_scan_util.h"
 #include "disk_scan_db.h"
 
 #define PIPE_BUF_SIZE 1024
 #define TIMEOUT 12000
+#define DELETE_INTERVAL 86440
+
+#define SQL_EXEC_DELETE 1010
 
 using namespace xl_ds_api;
 
@@ -27,7 +31,6 @@ VOID ReadMonitoringPath(std::vector<std::wstring> &paths);
 VOID WriteMonitoringPath(std::vector<std::wstring> paths);
 VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo > &scanFiles);
 VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles);
-VOID DeleteMonitoringFiles(std::vector<std::wstring> fullPaths);
 
 DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam);
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam);
@@ -64,85 +67,16 @@ VOID CDiskScan::StartPictureDirectoryScan(DWORD threadID, LPTSTR requestCode)
 
 VOID CDiskScan::StartPictrueAutoScan()
 {
-	//读取监控目录
-    std::vector<std::wstring> paths;
-	ReadMonitoringPath(paths);
-
-	//读取数据库中的监控文件信息
-	std::map<std::wstring, xl_ds_api::CScanFileInfo> files;
-	ReadMonitoringFiles(paths, files);
-    
-	std::vector<std::wstring>::iterator iter;
-    for (iter = paths.begin(); iter != paths.end(); iter++) {
-		// 遍历监控目录，记录当前目录下需要更新的文件（新增和更新）
-		
-		std::vector<xl_ds_api::CScanFileInfo> updateFiles;
-        if (SetCurrentDirectory((*iter).c_str())) {
-            WIN32_FIND_DATA findData;
-            HANDLE handle = FindFirstFile(L"*.*", &findData);
-            if (handle != INVALID_HANDLE_VALUE) {
-                BOOL finish = FALSE;
-                do {
-					std::wstring strFileName = findData.cFileName;
-					if (strFileName == L"." || strFileName == L"..") {
-						finish = !FindNextFile(handle, &findData);
-						continue;
-					}
-					// 过滤非目标图片
-					std::wstring::size_type suffixPos = strFileName.rfind(L".");
-					std::wstring suffix = strFileName.substr(suffixPos);
-					std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
-					if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
-						finish = !FindNextFile(handle, &findData);
-						continue;
-					}
-
-					xl_ds_api::CScanFileInfo fileInfo;
-					fileInfo.m_Path = (*iter);
-					fileInfo.m_Name = findData.cFileName;
-					fileInfo.m_FullPath = (*iter) + findData.cFileName;
-					fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
-					fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
-					fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
-					fileInfo.m_FileSizeLow = findData.nFileSizeLow;
-					fileInfo.m_State = 0;
-
-					// 1、根据路径匹配数据库记录
-					std::map<std::wstring, xl_ds_api::CScanFileInfo>::iterator foundIter = files.find(fileInfo.m_FullPath);
-					if (foundIter == files.end()) {
-						// 2、如果没有匹配，认为是新增文件（加入上传）
-						updateFiles.push_back(fileInfo);
-					} else {
-						// 3、如果匹配到路径，比较修改时间、文件大小、CID，来确认是否是同一个文件
-						xl_ds_api::CScanFileInfo foundInfo = (*foundIter).second;
-						if (foundInfo.m_LastModifyHigh == fileInfo.m_LastModifyHigh 
-							&& foundInfo.m_LastModifyLow == fileInfo.m_LastModifyLow
-							&& foundInfo.m_FileSizeHigh == fileInfo.m_FileSizeHigh
-							&& foundInfo.m_FileSizeLow == fileInfo.m_FileSizeLow
-							&& foundInfo.m_CID == (fileInfo.m_CID = CIDCalculate(fileInfo.m_FullPath))) {
-								// 4、如果是同一个文件，若之前删除了这个文件，则要重新上传
-								if (foundInfo.m_State > 0) {
-									updateFiles.push_back(fileInfo);
-								}
-						} else {
-							// 5、如果不是同一个文件，则需要上传
-							updateFiles.push_back(fileInfo);
-						}
-						files.erase(foundIter);
-					}
-                    finish = !FindNextFile(handle, &findData);
-                } while (!finish);
-            }
-            FindClose(handle);
-        }
-		if (updateFiles.size() > 0 && CreateDownloadTask(updateFiles)) {
-			WriteMonitoringFiles(updateFiles);
-		}
-    }
-	// 遍历files中剩余的没有被匹配过的数据，根据删除时间更新数据库
-	// 删除时间<=0则表示本次扫描时发现被删除，更新删除时间为当前时间
-	// 删除时间>0则比较是否符合删除条件（超过一定时间显示）
-	// 符合则从数据库中删除，不符合则不更新数据库
+	DWORD threadID;
+	if (!m_PicScanning) {
+		CreateThread(
+			NULL,
+			0,
+			PictureAutoScanExecute,
+			NULL,
+			0,
+			&threadID);
+	}
 }
 
 VOID CDiskScan::StartPictureManualScan(std::vector<std::wstring> paths)
@@ -308,7 +242,98 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 {
 	m_PicScanning = TRUE;
-
+	time_t curTime = time(NULL);
+	//读取监控目录
+	std::vector<std::wstring> paths;
+	ReadMonitoringPath(paths);
+	//读取数据库中的监控文件信息
+	std::map<std::wstring, xl_ds_api::CScanFileInfo> files;
+	ReadMonitoringFiles(paths, files);
+	// 遍历监控目录，记录当前目录下需要更新的文件（新增和更新）
+	std::vector<std::wstring>::iterator iter;
+	for (iter = paths.begin(); iter != paths.end(); iter++) {
+		std::vector<xl_ds_api::CScanFileInfo> updateFiles;
+		if (SetCurrentDirectory((*iter).c_str())) {
+			WIN32_FIND_DATA findData;
+			HANDLE handle = FindFirstFile(L"*.*", &findData);
+			if (handle != INVALID_HANDLE_VALUE) {
+				BOOL finish = FALSE;
+				do {
+					std::wstring strFileName = findData.cFileName;
+					if (strFileName == L"." || strFileName == L"..") {
+						finish = !FindNextFile(handle, &findData);
+						continue;
+					}
+					// 过滤非目标图片
+					std::wstring::size_type suffixPos = strFileName.rfind(L".");
+					std::wstring suffix = strFileName.substr(suffixPos);
+					std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
+					if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
+						finish = !FindNextFile(handle, &findData);
+						continue;
+					}
+					xl_ds_api::CScanFileInfo fileInfo;
+					fileInfo.m_Path = (*iter);
+					fileInfo.m_Name = findData.cFileName;
+					fileInfo.m_FullPath = (*iter) + findData.cFileName;
+					fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
+					fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
+					fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
+					fileInfo.m_FileSizeLow = findData.nFileSizeLow;
+					fileInfo.m_State = 0;
+					// 1、根据路径匹配数据库记录
+					std::map<std::wstring, xl_ds_api::CScanFileInfo>::iterator foundIter = files.find(fileInfo.m_FullPath);
+					if (foundIter == files.end()) {
+						// 2、如果没有匹配，认为是新增文件（加入上传）
+						updateFiles.push_back(fileInfo);
+					} else {
+						// 3、如果匹配到路径，比较修改时间、文件大小、CID，来确认是否是同一个文件
+						xl_ds_api::CScanFileInfo foundInfo = (*foundIter).second;
+						if (foundInfo.m_LastModifyHigh == fileInfo.m_LastModifyHigh 
+							&& foundInfo.m_LastModifyLow == fileInfo.m_LastModifyLow
+							&& foundInfo.m_FileSizeHigh == fileInfo.m_FileSizeHigh
+							&& foundInfo.m_FileSizeLow == fileInfo.m_FileSizeLow
+							&& foundInfo.m_CID == (fileInfo.m_CID = CIDCalculate(fileInfo.m_FullPath))) {
+								// 4、如果是同一个文件，若之前删除了这个文件，则要重新上传
+								if (foundInfo.m_State > 0) {
+									updateFiles.push_back(fileInfo);
+								}
+						} else {
+							// 5、如果不是同一个文件，则需要上传
+							updateFiles.push_back(fileInfo);
+						}
+						files.erase(foundIter);
+					}
+					finish = !FindNextFile(handle, &findData);
+				} while (!finish);
+			}
+			FindClose(handle);
+		}
+		if (updateFiles.size() > 0 && CreateDownloadTask(updateFiles)) {
+			WriteMonitoringFiles(updateFiles);
+		}
+	}
+	// 遍历files中剩余的没有被匹配过的数据，根据删除时间更新数据库
+	std::map<std::wstring, xl_ds_api::CScanFileInfo>::iterator deleteIter;
+	std::vector<xl_ds_api::CScanFileInfo> remainFiles;
+	for (deleteIter = files.begin(); deleteIter != files.end(); deleteIter++) {
+		xl_ds_api::CScanFileInfo foundInfo = (*deleteIter).second;
+		if (foundInfo.m_State > 0) {
+			// 删除时间>0则比较是否符合删除条件（超过一定时间限制）
+			// 符合则从数据库中删除，不符合则不更新数据库
+			if ((curTime - foundInfo.m_State) > DELETE_INTERVAL) {
+				foundInfo.m_SqlExec = SQL_EXEC_DELETE;
+				remainFiles.push_back(foundInfo);
+			}
+		} else {
+			// 删除时间<=0则表示本次扫描时发现被删除，更新删除时间为当前时间
+			foundInfo.m_State = curTime;
+			remainFiles.push_back(foundInfo);
+		}
+	}
+	if (remainFiles.size() > 0) {
+		WriteMonitoringFiles(remainFiles);
+	}
 	m_PicScanning = FALSE;
 	return 0;
 }
@@ -440,25 +465,24 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> files)
 	db.Exec("BEGIN TRANSACTION");
     for (iter = files.begin(); iter != files.end(); iter++) {
         CHAR sql[1024] = {0};
-        sprintf(sql, "INSERT OR REPLACE INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
-            UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str(),
-            UTF16ToUTF8((*iter).m_Path.c_str()).c_str(),
-            UTF16ToUTF8((*iter).m_Name.c_str()).c_str(),
-            (*iter).m_CID.c_str(),
-            (*iter).m_State,
-            (*iter).m_LastModifyHigh,
-            (*iter).m_LastModifyLow,
-            (*iter).m_FileSizeHigh,
-            (*iter).m_FileSizeLow);
+		if ((*iter).m_SqlExec == SQL_EXEC_DELETE) {
+			sprintf(sql, "DELETE FROM monitoring_file WHERE fullPath = '%s'", UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str());
+		} else {
+			sprintf(sql, "INSERT OR REPLACE INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
+				UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str(),
+				UTF16ToUTF8((*iter).m_Path.c_str()).c_str(),
+				UTF16ToUTF8((*iter).m_Name.c_str()).c_str(),
+				(*iter).m_CID.c_str(),
+				(*iter).m_State,
+				(*iter).m_LastModifyHigh,
+				(*iter).m_LastModifyLow,
+				(*iter).m_FileSizeHigh,
+				(*iter).m_FileSizeLow);
+		}
         db.Exec(sql);
     }
 	db.Exec("COMMIT TRANSACTION");
 ExitFree:
     db.Close();
     ReleaseMutex(m_MFMutex);
-}
-
-VOID DeleteMonitoringFiles(std::vector<std::wstring> fullPaths)
-{
-
 }

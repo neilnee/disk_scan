@@ -39,12 +39,13 @@ BOOL CDiskScanDB::CheckTable(const wchar_t* table)
 
 BOOL CDiskScanDB::Exec(const char* sql)
 {
-    return m_DB && sqlite3_exec(
-        m_DB,
-        sql,
-        NULL,
-        NULL,
-        NULL) == SQLITE_OK;
+	int ret = sqlite3_exec(
+		m_DB,
+		sql,
+		NULL,
+		NULL,
+		NULL);
+    return m_DB && ret == SQLITE_OK;
 }
 
 BOOL CDiskScanDB::Prepare(const wchar_t* sql)

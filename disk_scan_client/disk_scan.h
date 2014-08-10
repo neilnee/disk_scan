@@ -54,7 +54,9 @@ namespace xl_ds_api
         std::wstring m_Name;
         std::string m_CID;
 		// 状态信息，0表示已上传；其它表示删除时间
-        INT m_State;
+        INT64 m_State;
+		// 表示更新数据库时是什么操作（删除/更新）
+		INT64 m_SqlExec;
         DWORD m_LastModifyHigh;
         DWORD m_LastModifyLow;
         DWORD m_FileSizeHigh;
