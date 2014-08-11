@@ -35,9 +35,9 @@ int _tmain(int argc, _TCHAR* argv[])
 					}
 					xl_ds_api::CScanResultEvent info = *infoPtr;
 					delete infoPtr;
-                    _tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Path.c_str());
+                    _tprintf(TEXT("%d, %d, %d, %s\n"), info.m_EventCode, info.m_ScanCount, info.m_TotalCount, info.m_Paths.at(0).c_str());
                     if (info.m_EventCode == SCAN_PATH_RESULT) {
-                        paths.push_back(info.m_Path);
+                        paths.push_back(info.m_Paths.at(0));
                     }
                     if (info.m_EventCode == SCAN_PATH_FINISH) {
                         diskScan->AddMonitoringDirectory(paths);

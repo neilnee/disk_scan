@@ -28,9 +28,10 @@ HANDLE m_MFMutex =CreateMutex(NULL, FALSE, NULL);
 DiskScanResultNotify m_ResultNotifyCallback;
 
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths);
-VOID WriteMonitoringPath(std::vector<std::wstring> paths);
-VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo > &scanFiles);
+BOOL WriteMonitoringPath(std::vector<std::wstring> paths);
+VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo> &scanFiles);
 VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles);
+VOID NotifyDiskScanResult(xl_ds_api::CScanResultEvent* resultEvent);
 
 DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam);
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam);
@@ -55,8 +56,8 @@ VOID CDiskScan::StartPictureDirectoryScan(LPTSTR requestCode)
     if (!m_PicDirScanning) {
         xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
         request->m_RequestCode = requestCode;
-        DWORD threadID;
 
+        DWORD threadID;
         CreateThread(
             NULL,
             0,
@@ -71,7 +72,6 @@ VOID CDiskScan::StartPictrueAutoScan()
 {
 	if (!m_PicScanning) {
         DWORD threadID;
-
 		CreateThread(
 			NULL,
 			0,
@@ -94,12 +94,28 @@ VOID CDiskScan::StartPictureManualScan(std::vector<std::wstring> paths)
 
 VOID CDiskScan::AddMonitoringDirectory(std::vector<std::wstring> paths)
 {
-	WriteMonitoringPath(paths);
+    xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
+    request->m_Paths = paths;
+    DWORD threadID;
+    CreateThread(
+        NULL,
+        0,
+        AddMonitoringDirectoryExecute,
+        (LPVOID) request,
+        0,
+        &threadID);
 }
 
 VOID CDiskScan::LoadMonitoringDirectory()
 {
-
+    DWORD threadID;
+    CreateThread(
+        NULL,
+        0,
+        LoadMonitoringDirectoryExecute,
+        NULL,
+        0,
+        &threadID);
 }
 
 VOID CDiskScan::SetResultNotifyCallback(DiskScanResultNotify resultNotify)
@@ -215,17 +231,13 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 		}
 		path = &data[offset];
 
-        WaitForSingleObject(m_IPSMutex, INFINITE);
-        if (m_ResultNotifyCallback != NULL) {
-            xl_ds_api::CScanResultEvent* scanInfo = new xl_ds_api::CScanResultEvent();
-            scanInfo->m_Msg = DSMSG_DIR_SCAN;
-            scanInfo->m_EventCode = eventCode;
-            scanInfo->m_ScanCount = scanCount;
-            scanInfo->m_TotalCount = totalCount;
-            scanInfo->m_Path = path;
-            m_ResultNotifyCallback(scanInfo);
-        }
-        ReleaseMutex(m_IPSMutex);
+        xl_ds_api::CScanResultEvent* resultEvent = new xl_ds_api::CScanResultEvent();
+        resultEvent->m_Msg = DSMSG_DIR_SCAN;
+        resultEvent->m_EventCode = eventCode;
+        resultEvent->m_ScanCount = scanCount;
+        resultEvent->m_TotalCount = totalCount;
+        resultEvent->m_Paths.push_back(path);
+        NotifyDiskScanResult(resultEvent);
 	} while (success);
 
 	CloseHandle(pipe);
@@ -342,11 +354,37 @@ DWORD WINAPI PictureManualScanExecute(LPVOID lpParam)
 
 DWORD WINAPI AddMonitoringDirectoryExecute(LPVOID lpParam)
 {
+    xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
+    if (requestPtr == NULL) {
+        return -1;
+    }
+    xl_ds_api::CScanRequest request = *requestPtr;
+    BOOL optRet = FALSE;
+    delete requestPtr;
+
+    if (request.m_Paths.size() > 0) {
+        optRet = WriteMonitoringPath(request.m_Paths);
+    }
+    xl_ds_api::CScanResultEvent* resultEvent = new xl_ds_api::CScanResultEvent();
+    resultEvent->m_Msg = DSMSG_ADD_DIR;
+    if (optRet) {
+        resultEvent->m_EventCode = ADD_DIR_SUCCESS;
+    } else {
+        resultEvent->m_EventCode = ADD_DIR_FAILED;
+    }
+    NotifyDiskScanResult(resultEvent);
 	return 0;
 }
 
 DWORD WINAPI LoadMonitoringDirectoryExecute(LPVOID lpParam)
 {
+    std::vector<std::wstring> paths;
+    ReadMonitoringPath(paths);
+    xl_ds_api::CScanResultEvent* resultEvent = new xl_ds_api::CScanResultEvent();
+    resultEvent->m_Msg = DSMSG_LOAD_DIR;
+    resultEvent->m_EventCode = LOAD_DIR_DONE;
+    resultEvent->m_Paths = paths;
+    NotifyDiskScanResult(resultEvent);
 	return 0;
 }
 
@@ -376,8 +414,9 @@ ExitFree:
     ReleaseMutex(m_MPMutex);
 }
 
-VOID WriteMonitoringPath(std::vector<std::wstring> paths)
+BOOL WriteMonitoringPath(std::vector<std::wstring> paths)
 {
+    BOOL result = FALSE;
     xl_ds_api::CDiskScanDB db;
     std::wstring dbPath = GetProcessPath();
     dbPath.append(L"\\scan_path.dat");
@@ -398,10 +437,11 @@ VOID WriteMonitoringPath(std::vector<std::wstring> paths)
         sprintf(sql, "INSERT INTO monitoring_path VALUES ('%s')", UTF16ToUTF8((*iter).c_str()).c_str());
         db.Exec(sql);
     }
-	db.Exec("COMMIT TRANSACTION");
+	result = db.Exec("COMMIT TRANSACTION");
 ExitFree:
     db.Close();
     ReleaseMutex(m_IPSMutex);
+    return result;
 }
 
 VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo > &files)
@@ -479,4 +519,13 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> files)
 ExitFree:
     db.Close();
     ReleaseMutex(m_MFMutex);
+}
+
+VOID NotifyDiskScanResult(xl_ds_api::CScanResultEvent* resultEvent)
+{
+    WaitForSingleObject(m_IPSMutex, INFINITE);
+    if (m_ResultNotifyCallback != NULL) {
+        m_ResultNotifyCallback(resultEvent);
+    }
+    ReleaseMutex(m_IPSMutex);
 }

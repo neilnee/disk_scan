@@ -18,6 +18,9 @@
 #define SCAN_PATH_RESULT 3
 #define SCAN_PATH_FINISH 4
 #define SCAN_PATH_STOP 5
+#define LOAD_DIR_DONE 6
+#define ADD_DIR_SUCCESS 7
+#define ADD_DIR_FAILED 8
 
 namespace xl_ds_api
 {
@@ -28,20 +31,8 @@ namespace xl_ds_api
 		virtual ~CScanRequest() {}
 	public :
 		LPTSTR m_RequestCode;
+        std::vector<std::wstring> m_Paths;
 	};
-
-    class CScanResultEvent
-    {
-    public :
-        CScanResultEvent() {} 
-        virtual ~CScanResultEvent() {}
-    public :
-        UINT m_Msg;
-        INT m_EventCode;
-		INT m_ScanCount;
-		INT m_TotalCount;
-        std::wstring m_Path;
-    };
 
     class CScanFileInfo
     {
@@ -61,6 +52,20 @@ namespace xl_ds_api
         INT64 m_State;
         // 表示更新数据库时是什么操作（删除/更新）
         INT64 m_SqlExec;
+    };
+
+    class CScanResultEvent
+    {
+    public :
+        CScanResultEvent() {} 
+        virtual ~CScanResultEvent() {}
+    public :
+        UINT m_Msg;
+        INT m_EventCode;
+        INT m_ScanCount;
+        INT m_TotalCount;
+        std::vector<std::wstring> m_Paths;
+        std::vector<xl_ds_api::CScanFileInfo> m_Files;
     };
 
     /**
