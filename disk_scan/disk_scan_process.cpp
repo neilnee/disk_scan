@@ -170,7 +170,7 @@ BOOL HandleReuqest(std::wstring request, HANDLE pipe)
 		}
 		result = TRUE;
 	} else if (request == SCAN_REQUEST_EXIT) {
-		ScanTargetCallback(SCAN_STOP, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
+		ScanTargetCallback(SCAN_PATH_STOP, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
         result = FALSE;
     } else {
 		if (pipe != INVALID_HANDLE_VALUE) {
@@ -187,7 +187,7 @@ VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
     if (m_StopCallback) {
         return;
     }
-    if (eventCode == SCAN_STOP) {
+    if (eventCode == SCAN_PATH_STOP) {
         m_StopCallback = TRUE;
     }
     TCHAR buf[PATH_BUF_SIZE] = {0};
@@ -205,14 +205,14 @@ VOID ScanTargetCallback(INT eventCode, INT scanCount, INT totalCount, std::wstri
 				write,
 				&written,
 				NULL);
-			if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
+			if (eventCode == SCAN_PATH_FINISH || eventCode == SCAN_PATH_STOP) {
 				FlushFileBuffers(*iter);
 				DisconnectNamedPipe(*iter);
 				CloseHandle(*iter);
 			}
 		}
 	}
-	if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
+	if (eventCode == SCAN_PATH_FINISH || eventCode == SCAN_PATH_STOP) {
 		m_Pipes.clear();
 	}
 	ReleaseMutex(m_Mutex);
@@ -237,9 +237,9 @@ DWORD WINAPI ThreadExecute(LPVOID lpParam)
     if (!m_Exit) {
         std::vector<std::wstring>::iterator iter;
         for (iter = m_Scanner->m_ImgDirectorys.begin(); iter != m_Scanner->m_ImgDirectorys.end(); iter++) {
-            ScanTargetCallback(SCAN_RESULT, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
+            ScanTargetCallback(SCAN_PATH_RESULT, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, *iter);
         }
-        ScanTargetCallback(SCAN_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
+        ScanTargetCallback(SCAN_PATH_FINISH, m_Scanner->m_ScanDirs, m_Scanner->m_TotalDirs, L"");
         CloseHandle(m_Thread);
 		m_Thread = INVALID_HANDLE_VALUE;
 		m_ImgScanning = FALSE;

@@ -236,7 +236,7 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 		}
 		//开始扫描directory目录，并回调进度
 		if (m_ScanTargetCallback != NULL) {
-			m_ScanTargetCallback(SCAN_START, m_ScanDirs, m_TotalDirs, directory);
+			m_ScanTargetCallback(SCAN_PATH_START, m_ScanDirs, m_TotalDirs, directory);
 		}
 		SetCurrentDirectory(directory.c_str());
 		handle = FindFirstFile(L"*", &fileData);
@@ -272,7 +272,7 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
             if(targetCount > 5 && ((targetCount * 10) / (targetCount + otherCount)) > 9) {
                 PushBackDir(targetDir, directory);
 				if (m_ScanTargetCallback != NULL) {
-					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, m_TotalDirs, directory);
+					m_ScanTargetCallback(SCAN_PATH_FOUND, m_ScanDirs, m_TotalDirs, directory);
 				}
             }
             FindClose(handle);

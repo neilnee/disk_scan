@@ -20,12 +20,12 @@ using namespace xl_ds_api;
 static const std::wstring IMG_SUFFIX[] = {
 	L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
 
-std::vector<DWORD> m_NotifyThreadIDs;
 BOOL m_PicDirScanning = FALSE;
 BOOL m_PicScanning = FALSE;
 HANDLE m_IPSMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MPMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MFMutex =CreateMutex(NULL, FALSE, NULL);
+DiskScanResultNotify m_ResultNotifyCallback;
 
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths);
 VOID WriteMonitoringPath(std::vector<std::wstring> paths);
@@ -44,31 +44,34 @@ CDiskScan::CDiskScan()
 
 CDiskScan::~CDiskScan()
 {
-    m_NotifyThreadIDs.clear();
+    m_ResultNotifyCallback = NULL;
 	CloseHandle(m_IPSMutex);
 	CloseHandle(m_MPMutex);
 	CloseHandle(m_MFMutex);
 }
 
-VOID CDiskScan::StartPictureDirectoryScan(DWORD threadID, LPTSTR requestCode)
+VOID CDiskScan::StartPictureDirectoryScan(LPTSTR requestCode)
 {
-	xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
-	request->m_ThreadID = threadID;
-	request->m_RequestCode = requestCode;
-    
-    CreateThread(
-        NULL,
-        0,
-        PictureDirectoryScanExecute,
-        (LPVOID) request,
-        0,
-        &threadID);
+    if (!m_PicDirScanning) {
+        xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
+        request->m_RequestCode = requestCode;
+        DWORD threadID;
+
+        CreateThread(
+            NULL,
+            0,
+            PictureDirectoryScanExecute,
+            (LPVOID) request,
+            0,
+            &threadID);
+    }
 }
 
 VOID CDiskScan::StartPictrueAutoScan()
 {
-	DWORD threadID;
 	if (!m_PicScanning) {
+        DWORD threadID;
+
 		CreateThread(
 			NULL,
 			0,
@@ -99,8 +102,16 @@ VOID CDiskScan::LoadMonitoringDirectory()
 
 }
 
+VOID CDiskScan::SetResultNotifyCallback(DiskScanResultNotify resultNotify)
+{
+    WaitForSingleObject(m_IPSMutex, INFINITE);
+    m_ResultNotifyCallback = resultNotify;
+    ReleaseMutex(m_IPSMutex);
+}
+
 DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 {
+    m_PicDirScanning = TRUE;
 	BOOL success = FALSE;
 	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
 	xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
@@ -109,19 +120,6 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 	}
 	xl_ds_api::CScanRequest request = *requestPtr;
 	delete requestPtr;
-
-	WaitForSingleObject(m_IPSMutex, INFINITE);
-	m_NotifyThreadIDs.push_back(request.m_ThreadID);
-	if(m_PicDirScanning) {
-		success = TRUE;
-	} else {
-		m_PicDirScanning = TRUE;
-	}
-	ReleaseMutex(m_IPSMutex);
-
-	if (success) {
-		return 0;
-	}
 
 	HANDLE pipe = INVALID_HANDLE_VALUE;
 	for(;;) {
@@ -217,21 +215,17 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 		}
 		path = &data[offset];
 
-		WaitForSingleObject(m_IPSMutex, INFINITE);
-		std::vector<DWORD>::iterator iter;
-		for (iter = m_NotifyThreadIDs.begin(); iter != m_NotifyThreadIDs.end(); iter++) {
-			xl_ds_api::CScanPathInfo* scanInfo = new xl_ds_api::CScanPathInfo();
-			scanInfo->m_EventCode = eventCode;
-			scanInfo->m_ScanCount = scanCount;
-			scanInfo->m_TotalCount = totalCount;
-			scanInfo->m_Path = path;
-			PostThreadMessage(*iter, DSMSG_DIR_SCAN, reinterpret_cast<WPARAM>(scanInfo), 0);
-		}
-		if (eventCode == SCAN_FINISH || eventCode == SCAN_STOP) {
-			m_NotifyThreadIDs.clear();
-			break;
-		}
-		ReleaseMutex(m_IPSMutex);
+        WaitForSingleObject(m_IPSMutex, INFINITE);
+        if (m_ResultNotifyCallback != NULL) {
+            xl_ds_api::CScanResultEvent* scanInfo = new xl_ds_api::CScanResultEvent();
+            scanInfo->m_Msg = DSMSG_DIR_SCAN;
+            scanInfo->m_EventCode = eventCode;
+            scanInfo->m_ScanCount = scanCount;
+            scanInfo->m_TotalCount = totalCount;
+            scanInfo->m_Path = path;
+            m_ResultNotifyCallback(scanInfo);
+        }
+        ReleaseMutex(m_IPSMutex);
 	} while (success);
 
 	CloseHandle(pipe);
