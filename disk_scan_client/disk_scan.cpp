@@ -84,12 +84,78 @@ VOID CDiskScan::StartPictrueAutoScan()
 
 VOID CDiskScan::StartPictureManualScan(std::vector<std::wstring> paths)
 {
-	// 启动文件的手动扫描和上传任务PictureUploadExecute线程
+    // 读取已经监控的目录
+    std::vector<std::wstring> monitoringPaths;
+    ReadMonitoringPath(monitoringPaths);
 	// 过滤掉已经监控的目录
-	// 遍历目标目录全部图片文件信息，创建任务
-	// 创建任务成功则将目标目录添入监控
-	// 依次计算文件CID，添加到任务信息中
-	// 更新数据库
+    std::vector<std::wstring>::iterator iter = paths.begin();
+    while(iter != paths.end()) {
+        std::vector<std::wstring>::iterator foundIter = std::find(monitoringPaths.begin(), monitoringPaths.end(), *iter);
+        if (foundIter != monitoringPaths.end()) {
+            iter = paths.erase(iter);
+        } else {
+            iter++;
+        }
+    }
+    // 遍历目标目录全部图片文件信息
+    std::vector<xl_ds_api::CScanFileInfo> uploadFiles;
+    for (iter = paths.begin(); iter != paths.end(); iter++) {
+        if (SetCurrentDirectory((*iter).c_str())) {
+            WIN32_FIND_DATA findData;
+            HANDLE handle = FindFirstFile(L"*.*", &findData);
+            if (handle != INVALID_HANDLE_VALUE) {
+                BOOL finish = FALSE;
+                do {
+                    std::wstring strFileName = findData.cFileName;
+                    if (strFileName == L"." || strFileName == L"..") {
+                        finish = !FindNextFile(handle, &findData);
+                        continue;
+                    }
+                    // 过滤非目标图片
+                    std::wstring::size_type suffixPos = strFileName.rfind(L".");
+                    std::wstring suffix = strFileName.substr(suffixPos);
+                    std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
+                    if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
+                        finish = !FindNextFile(handle, &findData);
+                        continue;
+                    }
+                    xl_ds_api::CScanFileInfo fileInfo;
+                    fileInfo.m_Path = (*iter);
+                    fileInfo.m_Name = findData.cFileName;
+                    fileInfo.m_FullPath = (*iter) + findData.cFileName;
+                    fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
+                    fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
+                    fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
+                    fileInfo.m_FileSizeLow = findData.nFileSizeLow;
+                    fileInfo.m_State = 0;
+                    uploadFiles.push_back(fileInfo);
+                    finish = !FindNextFile(handle, &findData);
+                } while (!finish);
+            }
+        }
+    }
+	// 创建任务，创建任务成功则将目标目录添入监控，回调通知
+    BOOL createTaskRet = FALSE;
+    xl_ds_api::CScanResultEvent* resultEvent = new xl_ds_api::CScanResultEvent();
+    resultEvent->m_Msg = DSMSG_PIC_SCAN;
+    if (uploadFiles.size() > 0 && CreateDownloadTask(uploadFiles)) {
+        WriteMonitoringPath(paths);
+        createTaskRet = TRUE;
+        resultEvent->m_EventCode = SCAN_IMG_MANUAL_SUCCESS;
+    } else {
+        resultEvent->m_EventCode = SCAN_IMG_MANUAL_FAILED;
+    }
+    NotifyDiskScanResult(resultEvent);
+    if (createTaskRet) {
+        // 依次计算文件CID，添加到任务信息中
+        std::vector<xl_ds_api::CScanFileInfo>::iterator fileIter;
+        for (fileIter = uploadFiles.begin(); fileIter != uploadFiles.end(); fileIter++) {
+            (*fileIter).m_CID = CIDCalculate((*fileIter).m_FullPath);
+            SetDownloadInfo(*fileIter);
+        }
+        // 更新数据库
+        WriteMonitoringFiles(uploadFiles);
+    }
 }
 
 VOID CDiskScan::AddMonitoringDirectory(std::vector<std::wstring> paths)
@@ -203,13 +269,16 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 
 	TCHAR buf[PIPE_BUF_SIZE];
 	DWORD dRead;
-	do {
+	for (;;) {
 		success = ReadFile(
 			pipe,
 			buf,
 			PIPE_BUF_SIZE*sizeof(TCHAR),
 			&dRead,
 			NULL);
+        if (!success) {
+            break;
+        }
 		std::wstring data = buf;
 		std::wstring path;
 		INT eventCode = 0;
@@ -238,7 +307,7 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
         resultEvent->m_TotalCount = totalCount;
         resultEvent->m_Paths.push_back(path);
         NotifyDiskScanResult(resultEvent);
-	} while (success);
+	}
 
 	CloseHandle(pipe);
 	pipe = INVALID_HANDLE_VALUE;

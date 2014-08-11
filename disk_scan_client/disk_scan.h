@@ -21,6 +21,8 @@
 #define LOAD_DIR_DONE 6
 #define ADD_DIR_SUCCESS 7
 #define ADD_DIR_FAILED 8
+#define SCAN_IMG_MANUAL_SUCCESS 9;
+#define SCAN_IMG_MANUAL_FAILED 10;
 
 namespace xl_ds_api
 {

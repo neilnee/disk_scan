@@ -21,6 +21,8 @@ int _tmain(int argc, _TCHAR* argv[])
     diskScan->SetResultNotifyCallback(DiskScanResultNotify);
     diskScan->StartPictureDirectoryScan(SCAN_REQUEST_IMG);
     //diskScan->StartPictrueAutoScan();
+    std::vector<std::wstring> addPaths;
+    //diskScan->StartPictureManualScan(paths);
 
     std::vector<std::wstring> paths;
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {
