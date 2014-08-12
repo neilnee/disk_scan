@@ -21,8 +21,12 @@ int _tmain(int argc, _TCHAR* argv[])
     diskScan->SetResultNotifyCallback(DiskScanResultNotify);
     diskScan->StartPictureDirectoryScan(SCAN_REQUEST_IMG);
     //diskScan->StartPictrueAutoScan();
-    std::vector<std::wstring> addPaths;
-    //diskScan->StartPictureManualScan(paths);
+    //std::vector<std::wstring> addPaths;
+    //addPaths.push_back(L"D:\\Thunder Network\\NeoImaging\\FrameMaterial\\Mask\\ÄÚÖÃËØ²Ä\\");
+    //addPaths.push_back(L"D:\\tempimg\\");
+    //diskScan->LoadMonitoringDirectory();
+    //diskScan->StartPictureManualScan(addPaths);
+
 
     std::vector<std::wstring> paths;
     while((ret = GetMessage( &msg, NULL, 0, 0 )) != 0) {

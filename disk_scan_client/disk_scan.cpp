@@ -18,10 +18,11 @@
 using namespace xl_ds_api;
 
 static const std::wstring IMG_SUFFIX[] = {
-	L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
+	L".jpg", L".png", L".jpeg", L".bmp", L".gif", L".psd", L".hdr", L".pic", L".tga"};
 
 BOOL m_PicDirScanning = FALSE;
 BOOL m_PicScanning = FALSE;
+BOOL m_PicManualScanning = FALSE;
 HANDLE m_IPSMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MPMutex = CreateMutex(NULL, FALSE, NULL);
 HANDLE m_MFMutex =CreateMutex(NULL, FALSE, NULL);
@@ -32,6 +33,7 @@ BOOL WriteMonitoringPath(std::vector<std::wstring> paths);
 VOID ReadMonitoringFiles(std::vector<std::wstring> paths, std::map<std::wstring,xl_ds_api::CScanFileInfo> &scanFiles);
 VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> scanFiles);
 VOID NotifyDiskScanResult(xl_ds_api::CScanResultEvent* resultEvent);
+BOOL FilterTargetFile(std::wstring path, WIN32_FIND_DATA findData, xl_ds_api::CScanFileInfo &fileInfo);
 
 DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam);
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam);
@@ -56,7 +58,6 @@ VOID CDiskScan::StartPictureDirectoryScan(LPTSTR requestCode)
     if (!m_PicDirScanning) {
         xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
         request->m_RequestCode = requestCode;
-
         DWORD threadID;
         CreateThread(
             NULL,
@@ -70,7 +71,7 @@ VOID CDiskScan::StartPictureDirectoryScan(LPTSTR requestCode)
 
 VOID CDiskScan::StartPictrueAutoScan()
 {
-	if (!m_PicScanning) {
+	if (!m_PicScanning && !m_PicManualScanning) {
         DWORD threadID;
 		CreateThread(
 			NULL,
@@ -84,77 +85,17 @@ VOID CDiskScan::StartPictrueAutoScan()
 
 VOID CDiskScan::StartPictureManualScan(std::vector<std::wstring> paths)
 {
-    // 读取已经监控的目录
-    std::vector<std::wstring> monitoringPaths;
-    ReadMonitoringPath(monitoringPaths);
-	// 过滤掉已经监控的目录
-    std::vector<std::wstring>::iterator iter = paths.begin();
-    while(iter != paths.end()) {
-        std::vector<std::wstring>::iterator foundIter = std::find(monitoringPaths.begin(), monitoringPaths.end(), *iter);
-        if (foundIter != monitoringPaths.end()) {
-            iter = paths.erase(iter);
-        } else {
-            iter++;
-        }
-    }
-    // 遍历目标目录全部图片文件信息
-    std::vector<xl_ds_api::CScanFileInfo> uploadFiles;
-    for (iter = paths.begin(); iter != paths.end(); iter++) {
-        if (SetCurrentDirectory((*iter).c_str())) {
-            WIN32_FIND_DATA findData;
-            HANDLE handle = FindFirstFile(L"*.*", &findData);
-            if (handle != INVALID_HANDLE_VALUE) {
-                BOOL finish = FALSE;
-                do {
-                    std::wstring strFileName = findData.cFileName;
-                    if (strFileName == L"." || strFileName == L"..") {
-                        finish = !FindNextFile(handle, &findData);
-                        continue;
-                    }
-                    // 过滤非目标图片
-                    std::wstring::size_type suffixPos = strFileName.rfind(L".");
-                    std::wstring suffix = strFileName.substr(suffixPos);
-                    std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
-                    if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
-                        finish = !FindNextFile(handle, &findData);
-                        continue;
-                    }
-                    xl_ds_api::CScanFileInfo fileInfo;
-                    fileInfo.m_Path = (*iter);
-                    fileInfo.m_Name = findData.cFileName;
-                    fileInfo.m_FullPath = (*iter) + findData.cFileName;
-                    fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
-                    fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
-                    fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
-                    fileInfo.m_FileSizeLow = findData.nFileSizeLow;
-                    fileInfo.m_State = 0;
-                    uploadFiles.push_back(fileInfo);
-                    finish = !FindNextFile(handle, &findData);
-                } while (!finish);
-            }
-        }
-    }
-	// 创建任务，创建任务成功则将目标目录添入监控，回调通知
-    BOOL createTaskRet = FALSE;
-    xl_ds_api::CScanResultEvent* resultEvent = new xl_ds_api::CScanResultEvent();
-    resultEvent->m_Msg = DSMSG_PIC_SCAN;
-    if (uploadFiles.size() > 0 && CreateDownloadTask(uploadFiles)) {
-        WriteMonitoringPath(paths);
-        createTaskRet = TRUE;
-        resultEvent->m_EventCode = SCAN_IMG_MANUAL_SUCCESS;
-    } else {
-        resultEvent->m_EventCode = SCAN_IMG_MANUAL_FAILED;
-    }
-    NotifyDiskScanResult(resultEvent);
-    if (createTaskRet) {
-        // 依次计算文件CID，添加到任务信息中
-        std::vector<xl_ds_api::CScanFileInfo>::iterator fileIter;
-        for (fileIter = uploadFiles.begin(); fileIter != uploadFiles.end(); fileIter++) {
-            (*fileIter).m_CID = CIDCalculate((*fileIter).m_FullPath);
-            SetDownloadInfo(*fileIter);
-        }
-        // 更新数据库
-        WriteMonitoringFiles(uploadFiles);
+    if (!m_PicManualScanning) {
+        xl_ds_api::CScanRequest* request = new xl_ds_api::CScanRequest();
+        request->m_Paths = paths;
+        DWORD threadID;
+        CreateThread(
+            NULL,
+            0,
+            PictureManualScanExecute,
+            (LPVOID) request,
+            0,
+            &threadID);
     }
 }
 
@@ -270,13 +211,12 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 	TCHAR buf[PIPE_BUF_SIZE];
 	DWORD dRead;
 	for (;;) {
-		success = ReadFile(
-			pipe,
-			buf,
-			PIPE_BUF_SIZE*sizeof(TCHAR),
-			&dRead,
-			NULL);
-        if (!success) {
+        if (!ReadFile(
+            pipe,
+            buf,
+            PIPE_BUF_SIZE*sizeof(TCHAR),
+            &dRead,
+            NULL)) {
             break;
         }
 		std::wstring data = buf;
@@ -334,28 +274,12 @@ DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 			if (handle != INVALID_HANDLE_VALUE) {
 				BOOL finish = FALSE;
 				do {
-					std::wstring strFileName = findData.cFileName;
-					if (strFileName == L"." || strFileName == L"..") {
-						finish = !FindNextFile(handle, &findData);
-						continue;
-					}
-					// 过滤非目标图片
-					std::wstring::size_type suffixPos = strFileName.rfind(L".");
-					std::wstring suffix = strFileName.substr(suffixPos);
-					std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
-					if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
-						finish = !FindNextFile(handle, &findData);
-						continue;
-					}
-					xl_ds_api::CScanFileInfo fileInfo;
-					fileInfo.m_Path = (*iter);
-					fileInfo.m_Name = findData.cFileName;
-					fileInfo.m_FullPath = (*iter) + findData.cFileName;
-					fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
-					fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
-					fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
-					fileInfo.m_FileSizeLow = findData.nFileSizeLow;
-					fileInfo.m_State = 0;
+                    xl_ds_api::CScanFileInfo fileInfo;
+                    // 过滤非目标文件
+                    if (!FilterTargetFile(*iter, findData, fileInfo)) {
+                        finish = !FindNextFile(handle, &findData);
+                        continue;
+                    }
 					// 1、根据路径匹配数据库记录
 					std::map<std::wstring, xl_ds_api::CScanFileInfo>::iterator foundIter = files.find(fileInfo.m_FullPath);
 					if (foundIter == files.end()) {
@@ -415,9 +339,69 @@ DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 
 DWORD WINAPI PictureManualScanExecute(LPVOID lpParam)
 {
-	m_PicScanning = TRUE;
+	m_PicManualScanning = TRUE;
+    xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
+    if (requestPtr == NULL) {
+        return -1;
+    }
+    xl_ds_api::CScanRequest request = *requestPtr;
+    delete requestPtr;
 
-	m_PicScanning = FALSE;
+    // 读取已经监控的目录
+    std::vector<std::wstring> monitoringPaths;
+    ReadMonitoringPath(monitoringPaths);
+    // 过滤掉已经监控的目录
+    std::vector<std::wstring>::iterator iter = request.m_Paths.begin();
+    while(iter != request.m_Paths.end()) {
+        std::vector<std::wstring>::iterator foundIter = std::find(monitoringPaths.begin(), monitoringPaths.end(), *iter);
+        if (foundIter != monitoringPaths.end()) {
+            iter = request.m_Paths.erase(iter);
+        } else {
+            iter++;
+        }
+    }
+    // 遍历目标目录全部图片文件信息
+    std::vector<xl_ds_api::CScanFileInfo> uploadFiles;
+    for (iter = request.m_Paths.begin(); iter != request.m_Paths.end(); iter++) {
+        if (SetCurrentDirectory((*iter).c_str())) {
+            WIN32_FIND_DATA findData;
+            HANDLE handle = FindFirstFile(L"*.*", &findData);
+            if (handle != INVALID_HANDLE_VALUE) {
+                BOOL finish = FALSE;
+                do {
+                    xl_ds_api::CScanFileInfo fileInfo;
+                    // 过滤非目标文件
+                    if (FilterTargetFile(*iter, findData, fileInfo)) {
+                        uploadFiles.push_back(fileInfo);
+                    }
+                    finish = !FindNextFile(handle, &findData);
+                } while (!finish);
+            }
+        }
+    }
+    // 创建任务，创建任务成功则将目标目录添入监控，回调通知
+    BOOL createTaskRet = FALSE;
+    xl_ds_api::CScanResultEvent* resultEvent = new xl_ds_api::CScanResultEvent();
+    resultEvent->m_Msg = DSMSG_PIC_SCAN;
+    if (uploadFiles.size() > 0 && CreateDownloadTask(uploadFiles)) {
+        WriteMonitoringPath(request.m_Paths);
+        createTaskRet = TRUE;
+        resultEvent->m_EventCode = SCAN_IMG_MANUAL_SUCCESS;
+    } else {
+        resultEvent->m_EventCode = SCAN_IMG_MANUAL_FAILED;
+    }
+    NotifyDiskScanResult(resultEvent);
+    if (createTaskRet) {
+        // 依次计算文件CID，添加到任务信息中
+        std::vector<xl_ds_api::CScanFileInfo>::iterator fileIter;
+        for (fileIter = uploadFiles.begin(); fileIter != uploadFiles.end(); fileIter++) {
+            (*fileIter).m_CID = CIDCalculate((*fileIter).m_FullPath);
+            SetDownloadInfo(*fileIter);
+        }
+        // 更新数据库
+        WriteMonitoringFiles(uploadFiles);
+    }
+	m_PicManualScanning = FALSE;
 	return 0;
 }
 
@@ -597,4 +581,29 @@ VOID NotifyDiskScanResult(xl_ds_api::CScanResultEvent* resultEvent)
         m_ResultNotifyCallback(resultEvent);
     }
     ReleaseMutex(m_IPSMutex);
+}
+
+BOOL FilterTargetFile(std::wstring path, WIN32_FIND_DATA findData, xl_ds_api::CScanFileInfo &fileInfo)
+{
+    // 过滤目录
+    std::wstring strFileName = findData.cFileName;
+    if (strFileName == L"." || strFileName == L".." || (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        return FALSE;
+    }
+    // 过滤非目标图片
+    std::wstring::size_type suffixPos = strFileName.rfind(L".");
+    std::wstring suffix = strFileName.substr(suffixPos);
+    std::transform(suffix.begin(), suffix.end(), suffix.begin(), tolower);
+    if (IMG_SUFFIX->find(suffix) == std::wstring::npos) {
+        return FALSE;
+    }
+    fileInfo.m_Path = path;
+    fileInfo.m_Name = findData.cFileName;
+    fileInfo.m_FullPath = path + findData.cFileName;
+    fileInfo.m_LastModifyHigh = findData.ftLastWriteTime.dwHighDateTime;
+    fileInfo.m_LastModifyLow = findData.ftLastWriteTime.dwLowDateTime;
+    fileInfo.m_FileSizeHigh = findData.nFileSizeHigh;
+    fileInfo.m_FileSizeLow = findData.nFileSizeLow;
+    fileInfo.m_State = 0;
+    return TRUE;
 }

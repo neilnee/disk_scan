@@ -17,7 +17,7 @@
 
 static const DWORD PATH_BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {
-    L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
+    L".jpg", L".png", L".jpeg", L".bmp", L".gif", L".psd", L".hdr", L".pic", L".tga"};
 
 namespace xl_ds_api
 {
