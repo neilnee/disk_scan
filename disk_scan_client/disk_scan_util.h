@@ -8,9 +8,9 @@
 
 std::wstring GetProcessPath();
 
-std::string UTF16ToUTF8(const wchar_t* src);
+std::string ToMultiByte(const wchar_t* src);
 
-std::wstring UTF8ToUTF16(const char*src);
+std::wstring ToWideChar(const char*src);
 
 BOOL CreateDownloadTask(std::vector<xl_ds_api::CScanFileInfo> files);
 

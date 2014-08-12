@@ -139,7 +139,7 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 	LPTSTR pipeName = TEXT("\\\\.\\pipe\\xlspace_disk_scan_pipe");
 	xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
 	if (requestPtr == NULL) {
-		return -1;
+		return 0;
 	}
 	xl_ds_api::CScanRequest request = *requestPtr;
 	delete requestPtr;
@@ -168,7 +168,7 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 			if (pipe != INVALID_HANDLE_VALUE) {
 				CloseHandle(pipe);
 			}
-			return -1;
+			return 0;
 		}
 		if (!WaitNamedPipe(pipeName, TIMEOUT)) {
 			// Á¬½Ó³¬Ê±
@@ -183,7 +183,7 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 		NULL,
 		NULL);
 	if (!success) {
-		return -1;
+		return 0;
 	}
 
 	DWORD dWrite;
@@ -254,6 +254,7 @@ DWORD WINAPI PictureDirectoryScanExecute(LPVOID lpParam)
 	return 0;
 }
 
+#pragma  warning(disable:4100)
 DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 {
 	m_PicScanning = TRUE;
@@ -336,13 +337,14 @@ DWORD WINAPI PictureAutoScanExecute(LPVOID lpParam)
 	m_PicScanning = FALSE;
 	return 0;
 }
+#pragma warning(default:4100)
 
 DWORD WINAPI PictureManualScanExecute(LPVOID lpParam)
 {
 	m_PicManualScanning = TRUE;
     xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
     if (requestPtr == NULL) {
-        return -1;
+        return 0;
     }
     xl_ds_api::CScanRequest request = *requestPtr;
     delete requestPtr;
@@ -409,7 +411,7 @@ DWORD WINAPI AddMonitoringDirectoryExecute(LPVOID lpParam)
 {
     xl_ds_api::CScanRequest* requestPtr = (xl_ds_api::CScanRequest*) lpParam;
     if (requestPtr == NULL) {
-        return -1;
+        return 0;
     }
     xl_ds_api::CScanRequest request = *requestPtr;
     BOOL optRet = FALSE;
@@ -429,6 +431,7 @@ DWORD WINAPI AddMonitoringDirectoryExecute(LPVOID lpParam)
 	return 0;
 }
 
+#pragma warning(disable:4100)
 DWORD WINAPI LoadMonitoringDirectoryExecute(LPVOID lpParam)
 {
     std::vector<std::wstring> paths;
@@ -440,6 +443,7 @@ DWORD WINAPI LoadMonitoringDirectoryExecute(LPVOID lpParam)
     NotifyDiskScanResult(resultEvent);
 	return 0;
 }
+#pragma warning(default:4100)
 
 VOID ReadMonitoringPath(std::vector<std::wstring> &paths) 
 {
@@ -487,7 +491,7 @@ BOOL WriteMonitoringPath(std::vector<std::wstring> paths)
 	db.Exec("BEGIN TRANSACTION");
     for (iter = paths.begin(); iter != paths.end(); iter++) {
         CHAR sql[SQL_BUF] = {0};
-        sprintf(sql, "INSERT INTO monitoring_path VALUES ('%s')", UTF16ToUTF8((*iter).c_str()).c_str());
+        sprintf(sql, "INSERT INTO monitoring_path VALUES ('%s')", ToMultiByte((*iter).c_str()).c_str());
         db.Exec(sql);
     }
 	result = db.Exec("COMMIT TRANSACTION");
@@ -553,12 +557,12 @@ VOID WriteMonitoringFiles(std::vector<xl_ds_api::CScanFileInfo> files)
     for (iter = files.begin(); iter != files.end(); iter++) {
         CHAR sql[1024] = {0};
 		if ((*iter).m_SqlExec == SQL_EXEC_DELETE) {
-			sprintf(sql, "DELETE FROM monitoring_file WHERE fullPath = '%s'", UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str());
+			sprintf(sql, "DELETE FROM monitoring_file WHERE fullPath = '%s'", ToMultiByte((*iter).m_FullPath.c_str()).c_str());
 		} else {
 			sprintf(sql, "INSERT OR REPLACE INTO monitoring_file VALUES ('%s','%s','%s','%s','%d','%d','%d','%d','%d')",
-				UTF16ToUTF8((*iter).m_FullPath.c_str()).c_str(),
-				UTF16ToUTF8((*iter).m_Path.c_str()).c_str(),
-				UTF16ToUTF8((*iter).m_Name.c_str()).c_str(),
+				ToMultiByte((*iter).m_FullPath.c_str()).c_str(),
+				ToMultiByte((*iter).m_Path.c_str()).c_str(),
+				ToMultiByte((*iter).m_Name.c_str()).c_str(),
 				(*iter).m_CID.c_str(),
 				(*iter).m_State,
 				(*iter).m_LastModifyHigh,

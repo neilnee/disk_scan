@@ -97,7 +97,7 @@ INT CDiskScanDB::GetInt(INT column)
 DWORD CDiskScanDB::GetInt64(INT column)
 {
     if (m_Stmt) {
-        return sqlite3_column_int64(m_Stmt, column);
+        return (DWORD)sqlite3_column_int64(m_Stmt, column);
     } else {
         return NULL;
     }
@@ -110,7 +110,7 @@ BOOL CDiskScanDB::Close()
         m_Stmt = NULL;
     }
     if (m_DB) {
-        sqlite3_close_v2(m_DB);
+        sqlite3_close(m_DB);
         m_DB = NULL;
     }
     return TRUE;
