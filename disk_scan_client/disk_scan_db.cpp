@@ -1,13 +1,11 @@
 #include "stdafx.h"
 #include "disk_scan_db.h"
-#include "sqlite3.h"
 
 using namespace xl_ds_api;
 
-sqlite3* m_DB;
-sqlite3_stmt* m_Stmt;
-
-CDiskScanDB::CDiskScanDB()
+CDiskScanDB::CDiskScanDB():
+m_DB(NULL),
+m_Stmt(NULL)
 {
 }
 

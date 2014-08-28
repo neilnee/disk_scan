@@ -1,6 +1,8 @@
 #ifndef _DISK_SCAN_DB_
 #define _DISK_SCAN_DB_
 
+#include "sqlite3.h"
+
 #define SQL_BUF 1024
 
 namespace xl_ds_api
@@ -22,6 +24,9 @@ namespace xl_ds_api
         INT GetInt(INT column);
         DWORD GetInt64(INT column);
         BOOL Close();
+	private :
+		sqlite3* m_DB;
+		sqlite3_stmt* m_Stmt;
     };
 }
 
