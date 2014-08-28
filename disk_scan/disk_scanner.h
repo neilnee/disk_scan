@@ -9,15 +9,15 @@
 #define PRIORITY_DIRS {CSIDL_DESKTOP, CSIDL_MYDOCUMENTS, CSIDL_MYPICTURES, CSIDL_COMMON_PICTURES, CSIDL_COMMON_DOCUMENTS, CSIDL_COMMON_DESKTOPDIRECTORY}
 #define IGNORE_DIRS {CSIDL_WINDOWS, CSIDL_PROGRAM_FILES, CSIDL_TEMPLATES, CSIDL_PROGRAM_FILESX86, CSIDL_APPDATA, CSIDL_COMMON_APPDATA, CSIDL_COOKIES, CSIDL_INTERNET_CACHE, CSIDL_LOCAL_APPDATA}
 
-#define SCAN_START 1
-#define SCAN_FOUND 2
-#define SCAN_RESULT 3
-#define SCAN_FINISH 4
-#define SCAN_STOP 5
+#define SCAN_PATH_START 1
+#define SCAN_PATH_FOUND 2
+#define SCAN_PATH_RESULT 3
+#define SCAN_PATH_FINISH 4
+#define SCAN_PATH_STOP 5
 
 static const DWORD PATH_BUF_SIZE  = 512;
 static const std::wstring IMG_SUFFIX[] = {
-    L".jpg", L".png", L".jpeg", L".bmp", L".tif", L".tiff", L".raw"};
+    L".jpg", L".png", L".jpeg", L".bmp", L".gif", L".psd", L".hdr", L".pic", L".tga"};
 
 namespace xl_ds_api
 {

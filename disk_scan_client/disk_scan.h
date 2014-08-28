@@ -13,11 +13,16 @@
 #define SCAN_REQUEST_IMG_AFREAH L"scan_img_afreah"
 #define SCAN_REQUEST_EXIT L"scan_exit"
 
-#define SCAN_START 1
-#define SCAN_FOUND 2
-#define SCAN_RESULT 3
-#define SCAN_FINISH 4
-#define SCAN_STOP 5
+#define SCAN_PATH_START 1
+#define SCAN_PATH_FOUND 2
+#define SCAN_PATH_RESULT 3
+#define SCAN_PATH_FINISH 4
+#define SCAN_PATH_STOP 5
+#define LOAD_DIR_DONE 6
+#define ADD_DIR_SUCCESS 7
+#define ADD_DIR_FAILED 8
+#define SCAN_IMG_MANUAL_SUCCESS 9;
+#define SCAN_IMG_MANUAL_FAILED 10;
 
 namespace xl_ds_api
 {
@@ -27,21 +32,9 @@ namespace xl_ds_api
 		CScanRequest() {}
 		virtual ~CScanRequest() {}
 	public :
-		DWORD m_ThreadID;
 		LPTSTR m_RequestCode;
+        std::vector<std::wstring> m_Paths;
 	};
-
-    class CScanPathInfo
-    {
-    public :
-        CScanPathInfo() {} 
-        virtual ~CScanPathInfo() {}
-    public :
-        INT m_EventCode;
-		INT m_ScanCount;
-		INT m_TotalCount;
-        std::wstring m_Path;
-    };
 
     class CScanFileInfo
     {
@@ -53,15 +46,34 @@ namespace xl_ds_api
         std::wstring m_Path;
         std::wstring m_Name;
         std::string m_CID;
-		// 状态信息，0表示已上传；其它表示删除时间
-        INT64 m_State;
-		// 表示更新数据库时是什么操作（删除/更新）
-		INT64 m_SqlExec;
         DWORD m_LastModifyHigh;
         DWORD m_LastModifyLow;
         DWORD m_FileSizeHigh;
         DWORD m_FileSizeLow;
+        // 状态信息，0表示已上传；其它表示删除时间
+        INT64 m_State;
+        // 表示更新数据库时是什么操作（删除/更新）
+        INT64 m_SqlExec;
     };
+
+    class CScanResultEvent
+    {
+    public :
+        CScanResultEvent() {} 
+        virtual ~CScanResultEvent() {}
+    public :
+        UINT m_Msg;
+        INT m_EventCode;
+        INT m_ScanCount;
+        INT m_TotalCount;
+        std::vector<std::wstring> m_Paths;
+        std::vector<xl_ds_api::CScanFileInfo> m_Files;
+    };
+
+    /**
+     * 扫描处理线程归并主线程
+     */
+    typedef void (*DiskScanResultNotify) (xl_ds_api::CScanResultEvent* result);
 
     class CDiskScan
     {
@@ -69,7 +81,7 @@ namespace xl_ds_api
         CDiskScan();
         virtual ~CDiskScan();
     public :
-        VOID StartPictureDirectoryScan(DWORD threadID, LPTSTR request);
+        VOID StartPictureDirectoryScan(LPTSTR request);
 
 		VOID StartPictrueAutoScan();
 
@@ -78,6 +90,8 @@ namespace xl_ds_api
 		VOID AddMonitoringDirectory(std::vector<std::wstring> paths);
 
 		VOID LoadMonitoringDirectory();
+
+        VOID SetResultNotifyCallback(DiskScanResultNotify resultNotify);
     };
 }
 

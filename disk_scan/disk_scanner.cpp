@@ -216,7 +216,7 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 	std::vector<std::wstring>::iterator iter;
 	std::vector<std::wstring> searchDir;
 	for (iter = baseDir->begin(); iter != baseDir->end(); iter++) {
-		WIN32_FIND_DATA fileData;
+		WIN32_FIND_DATA findData;
 		HANDLE handle = INVALID_HANDLE_VALUE;
 		std::wstring directory = *iter;
         
@@ -236,19 +236,19 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
 		}
 		//开始扫描directory目录，并回调进度
 		if (m_ScanTargetCallback != NULL) {
-			m_ScanTargetCallback(SCAN_START, m_ScanDirs, m_TotalDirs, directory);
+			m_ScanTargetCallback(SCAN_PATH_START, m_ScanDirs, m_TotalDirs, directory);
 		}
 		SetCurrentDirectory(directory.c_str());
-		handle = FindFirstFile(L"*", &fileData);
+		handle = FindFirstFile(L"*", &findData);
 		if (handle != INVALID_HANDLE_VALUE) {
 			BOOL finish = FALSE;
             INT targetCount = 0;
             INT otherCount = 0;
 			do {
-				std::wstring strFileName = fileData.cFileName;
+				std::wstring strFileName = findData.cFileName;
 				//需要过滤掉.和..
                 if (strFileName != L"." && strFileName != L"..") {
-                    if (fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                    if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                         // 将目录列入下次递归扫描的列表
                         searchDir.push_back(directory+strFileName);
                         m_TotalDirs++;
@@ -266,13 +266,13 @@ VOID CScanner::ScanTargetDir(std::vector<std::wstring>* baseDir, std::vector<std
                         }
                     }
                 }
-				finish = !FindNextFile(handle, &fileData);
+				finish = !FindNextFile(handle, &findData);
 			} while (!finish);
             // 遍历完后判定是否属于图片文件夹
             if(targetCount > 5 && ((targetCount * 10) / (targetCount + otherCount)) > 9) {
                 PushBackDir(targetDir, directory);
 				if (m_ScanTargetCallback != NULL) {
-					m_ScanTargetCallback(SCAN_FOUND, m_ScanDirs, m_TotalDirs, directory);
+					m_ScanTargetCallback(SCAN_PATH_FOUND, m_ScanDirs, m_TotalDirs, directory);
 				}
             }
             FindClose(handle);
